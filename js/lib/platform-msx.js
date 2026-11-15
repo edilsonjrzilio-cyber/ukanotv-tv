@@ -48,9 +48,60 @@
       });
     } catch (e) {}
   }
+
+  // Voltar do controle na LG dentro do MSX (bug de 15/11: em Filmes, Voltar
+  // pedia pra sair do app em vez de voltar pra Início). O app do MSX na LG
+  // não liga o "disableBackHistoryAPI" (o nosso app da LG liga), então a TV
+  // não manda a tecla 461 pra página: ela faz "voltar a página"
+  // (history.back) e, sem página anterior, mostra o "sair do app?".
+  // Solução: sempre deixar uma página anterior falsa (pushState). Quando a
+  // TV volta pra ela (popstate), é o Voltar do controle: recoloca a falsa e
+  // manda o mesmo "sn:back" que a tecla 461 manda (spatialnav.js).
+  // Se a TV mandar a tecla E voltar a página no mesmo toque, só vale um.
+  var DEDUP_MS = 700;
+  var lastKeyBack = 0;
+  var lastPopBack = 0;
+  var exiting = false;
+  function pushGuard() {
+    try {
+      global.history.pushState({
+        ukanoBack: true
+      }, "");
+    } catch (e) {}
+  }
+  function lgBackViaHistory() {
+    if (!global.history || typeof global.history.pushState !== "function") return;
+    // Na fase de captura da window: roda antes do spatialnav (document).
+    global.addEventListener("keydown", function (e) {
+      if (e.keyCode !== 461) return;
+      if (Date.now() - lastPopBack < DEDUP_MS) {
+        e.preventDefault();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        return;
+      }
+      lastKeyBack = Date.now();
+    }, true);
+    global.addEventListener("popstate", function () {
+      if (exiting) {
+        // O platformBack voltou a página em vez de mostrar o "sair do app?".
+        try {
+          window.close();
+        } catch (e) {}
+        return;
+      }
+      pushGuard();
+      if (Date.now() - lastKeyBack < DEDUP_MS) return;
+      lastPopBack = Date.now();
+      document.dispatchEvent(new CustomEvent("sn:back"));
+    });
+    pushGuard();
+  }
   function init() {
     if (base.init) base.init();
-    if (isLg) lgPreventScreenSaver();
+    if (isLg) {
+      lgPreventScreenSaver();
+      lgBackViaHistory();
+    }
   }
 
   // Voltar na Início/Login: fecha o MSX inteiro, pelo jeito de cada TV.
@@ -61,6 +112,12 @@
     }
     try {
       if (global.webOS && typeof global.webOS.platformBack === "function") {
+        // O popstate que vier logo depois é do próprio platformBack (ver
+        // lgBackViaHistory), não um Voltar novo.
+        exiting = true;
+        setTimeout(function () {
+          exiting = false;
+        }, 1500);
         global.webOS.platformBack();
         return;
       }
