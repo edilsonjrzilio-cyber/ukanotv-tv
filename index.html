@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="vermelho">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1920, height=1080, initial-scale=1" />
+<title>UKANOTV</title>
+<link rel="stylesheet" href="css/theme.css?v=mwhtilkd" />
+</head>
+<body>
+
+<div class="screen" data-screen="login"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="activation"><div class="screen-content"></div></div>
+<div class="screen" data-screen="home"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="live"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="movies"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="movieDetail"><div class="screen-content"></div></div>
+<div class="screen" data-screen="series"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="seriesDetail"><div class="screen-content"></div></div>
+<div class="screen" data-screen="favorites"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="settings"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="lists"><div class="screen-bg"></div><div class="screen-content"></div></div>
+<div class="screen" data-screen="player"><div class="screen-content"></div></div>
+
+<!-- Cobre o vão entre o app abrir e App.boot() decidir Login/Início/
+     Ativação (ensureActivated faz uma chamada de rede antes disso) --
+     sem isso ficava tudo preto, sem feedback nenhum, até a 1ª tela
+     ativar (bug real reportado: "saí e entrei de novo, ficou tudo preto,
+     não aparece aquela parte de carregando igual o Android" -- lá o
+     VerifyingScreen.kt cobre esse mesmo vão). Visível por padrão (HTML
+     puro, antes de qualquer JS rodar); App.boot() some com ele assim que
+     a 1ª tela de verdade ativa (ver Router.go). -->
+<div id="boot-loading">
+  <div class="boot-logo">U</div>
+  <div class="boot-title">UKANOTV</div>
+  <div class="boot-spinner"></div>
+  <div class="boot-text">Verificando sua sessão…</div>
+</div>
+
+<!-- libs / infra -->
+<!-- APIs da TV Samsung (AVPlay, DUID, descanso de tela) -- a TV resolve
+     $WEBAPIS sozinha; no navegador do PC só falha e o app segue sem elas. -->
+<script src="js/compat.js"></script>
+<script src="$WEBAPIS/webapis/webapis.js"></script>
+<script src="js/lib/webOSTV.js?v=mwhtilkd"></script>
+<script src="js/lib/platform.js?v=mwhtilkd"></script>
+<script src="js/lib/platform-msx.js?v=mwhtilkd"></script>
+<script src="js/lib/spatialnav.js?v=mwhtilkd"></script>
+<script src="js/ui/backHandler.js?v=mwhtilkd"></script>
+<script src="js/ui/icons.js?v=mwhtilkd"></script>
+<script src="js/ui/screenHeader.js?v=mwhtilkd"></script>
+<script src="js/ui/keyboard.js?v=mwhtilkd"></script>
+<script src="js/ui/blockedDialog.js?v=mwhtilkd"></script>
+<script src="js/ui/choiceDialog.js?v=mwhtilkd"></script>
+<script src="js/ui/router.js?v=mwhtilkd"></script>
+<script src="js/ui/theme.js?v=mwhtilkd"></script>
+
+<!-- data layer -->
+<script src="js/data/deviceIdentity.js?v=mwhtilkd"></script>
+<script src="js/data/sessionStore.js?v=mwhtilkd"></script>
+<script src="js/data/panelApi.js?v=mwhtilkd"></script>
+<script src="js/data/m3uParser.js?v=mwhtilkd"></script>
+<script src="js/data/xtreamApi.js?v=mwhtilkd"></script>
+<script src="js/data/adult.js?v=mwhtilkd"></script>
+<script src="js/data/continueWatching.js?v=mwhtilkd"></script>
+<script src="js/data/playerAlternates.js?v=mwhtilkd"></script>
+<script src="js/data/appUpdate.js?v=mwhtilkd"></script>
+
+<!-- screens -->
+<script src="js/ui/contentGrid.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/login.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/home.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/live.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/movies.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/movieDetail.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/series.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/seriesDetail.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/favorites.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/settings.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/lists.js?v=mwhtilkd"></script>
+<script src="js/ui/screens/player.js?v=mwhtilkd"></script>
+
+<script src="js/app.js?v=mwhtilkd"></script>
+</body>
+</html>

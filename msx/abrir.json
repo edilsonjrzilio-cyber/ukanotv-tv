@@ -1,0 +1,31 @@
+{
+    "type": "list",
+    "cache": false,
+    "headline": "UKANOTV",
+    "action": "delay:abrir:3:link:replace:http://tv.ukanotv.com/",
+    "template": {
+        "type": "separate",
+        "layout": "0,0,12,1",
+        "color": "msx-glass"
+    },
+    "items": [
+        {
+            "title": "Abrir o UKANOTV",
+            "titleFooter": "Abre sozinho em 3 segundos.",
+            "icon": "msx-white-soft:play-arrow",
+            "action": "link:replace:http://tv.ukanotv.com/"
+        },
+        {
+            "title": "Ficar no Media Station X",
+            "titleFooter": "Para mudar o endereço ou os ajustes do Media Station X.",
+            "icon": "msx-white-soft:pause",
+            "action": "delay:abrir:cancel"
+        },
+        {
+            "title": "Ajustes do Media Station X",
+            "titleFooter": "Antes, escolha \"Ficar no Media Station X\".",
+            "icon": "msx-white-soft:settings",
+            "action": "settings"
+        }
+    ]
+}

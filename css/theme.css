@@ -1,0 +1,163 @@
+/* Paleta portada de tv-app/android/.../ui/common/Theme.kt -- mesmos valores
+   exatos, pra manter os três apps (Android/Roku/LG) visualmente idênticos. */
+:root {
+  --bg: #0A0A0C;
+  --surface: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.10);
+  --text: #F1F5F9;
+  --subtext: #94A3B8;
+  --muted: #64748B;
+
+  /* Tema padrão "vermelho" (marca UKANOTV) -- ver THEME_PRESETS no Android.
+     Trocado em runtime via Ajustes > troca de tema (classe no <html>). */
+  --accent: #E11D48;
+  --accent-soft: #F97316;
+
+  --tile-live-start: #E11D48;
+  --tile-live-end: #F97316;
+  --tile-movies-start: #2563EB;
+  --tile-movies-end: #38BDF8;
+  --tile-series-start: #7C3AED;
+  --tile-series-end: #C026D3;
+  --tile-settings-start: #475569;
+  --tile-settings-end: #64748B;
+}
+
+/* Presets de tema -- aplicados trocando data-theme na <html>, espelha
+   THEME_PRESETS do Android (mesmos ids/valores). */
+html[data-theme="roxo"]     { --accent: #8B5CF6; --accent-soft: #3B82F6; }
+html[data-theme="azul"]     { --accent: #2563EB; --accent-soft: #22D3EE; }
+html[data-theme="vermelho"] { --accent: #E11D48; --accent-soft: #F97316; }
+html[data-theme="verde"]    { --accent: #16A34A; --accent-soft: #84CC16; }
+html[data-theme="laranja"]  { --accent: #F97316; --accent-soft: #FACC15; }
+html[data-theme="rosa"]     { --accent: #DB2777; --accent-soft: #F472B6; }
+html[data-theme="ciano"]    { --accent: #0891B2; --accent-soft: #67E8F9; }
+html[data-theme="dourado"]  { --accent: #CA8A04; --accent-soft: #FDE047; }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: "LG Smart UI", "Noto Sans", Arial, sans-serif;
+}
+button, input { font-family: inherit; }
+
+/* Esconde a barra de rolagem nativa em TODO elemento rolável (categorias,
+   grade de Filmes/Séries, lista de Ao vivo, teclado, etc.) -- controle
+   remoto não tem mouse pra arrastar uma barra, o D-pad já rola sozinho
+   (scrollIntoViewIfNeeded em spatialnav.js); sem isso, o navegador
+   desenhava uma barra cinza padrão por cima do design (bug visual real
+   apontado: "tá aparecendo umas barra cinza que não faz parte"). */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* top/right/bottom/left explícitos em vez do shorthand "inset" em TODO o
+   app (não só aqui) -- inset só existe em Chromium 87+, e algumas TVs LG
+   mais antigas (webOS 5/6) rodam Chromium ~79. Sem isso o fundo/overlay
+   inteiro não se posicionava, quebrando a tela toda nesses aparelhos. */
+.screen { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: none; }
+.screen.active { display: block; }
+
+/* Overlay de boot -- cobre o vão preto entre o app abrir e App.boot()
+   decidir a 1ª tela (ensureActivated faz uma chamada de rede antes
+   disso). Visível por padrão (sem classe nenhuma precisa); App.boot()
+   adiciona .boot-done assim que a 1ª tela ativa de verdade. */
+#boot-loading {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 90;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg); transition: opacity 200ms ease;
+}
+#boot-loading.boot-done { opacity: 0; pointer-events: none; }
+.boot-logo {
+  width: 64px; height: 64px; border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  display: flex; align-items: center; justify-content: center;
+  color: #000; font-size: 26px; font-weight: 900;
+}
+.boot-title { color: var(--accent); font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 14px; }
+.boot-spinner {
+  width: 32px; height: 32px; margin-top: 26px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.15); border-top-color: var(--accent);
+  animation: boot-spin 800ms linear infinite;
+}
+.boot-text { color: var(--subtext); font-size: 13px; font-weight: 700; margin-top: 14px; }
+@keyframes boot-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Aviso rápido por cima de qualquer tela, até do #boot-loading (ex.: troca
+   sozinha de servidor, ver App.showNotice). Só texto, sem .focusable nem
+   clique: o controle continua na tela de trás. Mesmo visual do Android. */
+#app-notice {
+  position: absolute; left: 50%; bottom: 32px; z-index: 95;
+  max-width: 720px; transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.9); color: #fff;
+  border-radius: 12px; padding: 12px 20px;
+  font-size: 15px; font-weight: 700; line-height: 22px; text-align: center;
+  pointer-events: none; opacity: 0; transition: opacity 200ms ease;
+}
+#app-notice.visible { opacity: 1; }
+
+/* Mesmo fundo de ondas (ScreenBackground.kt) usado em todas as telas
+   (Início/Ao vivo/Filmes/Séries/Favoritos/Login) -- pedido explícito pra
+   não "ficar tudo escuro de repente" ao navegar pra fora do Início. */
+.screen-bg {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  background: url("../images/bg_waves.png") center / cover no-repeat, var(--bg);
+}
+.screen-bg::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, 0.349);
+}
+.screen-bg.home-tint::after { background: rgba(0, 0, 0, 0.2); }
+.screen-content { position: relative; z-index: 1; width: 100%; height: 100%; }
+
+/* Faixa de título (ScreenHeader.kt) */
+.screen-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 32px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.screen-header .title {
+  color: #fff; font-size: 24px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase;
+}
+.screen-header .right { display: flex; align-items: center; gap: 16px; }
+.screen-header .hint { color: var(--accent-soft); font-size: 18px; font-weight: 700; }
+
+/* Foco (TvFocus.kt / border de 3px no accent) -- toda superfície focável
+   usa essa mesma convenção: 1px sutil parado, 3px na cor do accent focado.
+   !important -- bug real encontrado testando no aparelho: várias telas
+   (ex.: cada tecla do teclado virtual) definem a PRÓPRIA border inline
+   (style="...border:...") pro estado parado, e estilo inline sempre vence
+   uma classe externa por especificidade, não importa a ordem. Sem
+   !important aqui, o foco mudava de verdade (confirmado via DevTools
+   remoto: a classe sn-focused ia pro elemento certo, SN.current() certo)
+   mas NENHUMA tecla mostrava destaque nenhum -- parecia completamente
+   travado no controle remoto, apertar seta não visivelmente "fazia nada". */
+.focusable {
+  outline: none; border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+.focusable.sn-focused {
+  border: 3px solid var(--accent) !important;
+}
+
+.row { display: flex; }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1; }
+
+/* Samsung: o AVPlay (player da TV) desenha o vídeo ATRÁS da página -- o
+   fundo da tela do player precisa ficar transparente enquanto ele toca
+   (classe colocada por js/lib/platform.js). */
+html.avplay-active,
+html.avplay-active body,
+html.avplay-active .screen[data-screen="player"],
+html.avplay-active .screen[data-screen="player"] .screen-bg,
+html.avplay-active .screen[data-screen="player"] .screen-content,
+html.avplay-active .screen[data-screen="player"] .screen-content > div {
+  background: transparent !important;
+  background-image: none !important;
+}
+html.avplay-active .screen[data-screen="player"] .screen-bg::after { background: transparent !important; }
+
+/* Navegador das Samsung antigas encolhe os itens de uma lista com rolagem
+   pra caber na altura (categorias ficavam achatadas e cortadas). Nos
+   navegadores novos os itens já não encolhem -- esta regra não muda nada
+   neles. */
+[data-sn-scroll] > * { flex-shrink: 0; }

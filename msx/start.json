@@ -1,0 +1,10 @@
+{
+    "name": "UKANOTV",
+    "version": "1.0.8 MSX",
+    "parameter": "content:{PREFIX}{SERVER}/msx/abrir.json",
+    "welcome": "none",
+    "launcher": {
+        "image": "{PREFIX}{SERVER}/msx/icon.png",
+        "color": "msx-black-soft"
+    }
+}
