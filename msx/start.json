@@ -1,6 +1,6 @@
 {
     "name": "UKANOTV",
-    "version": "1.0.11 MSX",
+    "version": "1.0.12 MSX",
     "parameter": "content:{PREFIX}{SERVER}/msx/abrir.json",
     "welcome": "none",
     "launcher": {
