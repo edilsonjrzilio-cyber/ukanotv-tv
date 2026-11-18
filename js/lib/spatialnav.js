@@ -64,6 +64,14 @@
       // centros, como sempre. O centro desempata entre os alinhados.
       var overX = r.left < fromRect.right && fromRect.left < r.right;
       var overY = r.top < fromRect.bottom && fromRect.top < r.bottom;
+      // Só em cima/embaixo (cruza na horizontal, não na vertical) não é
+      // candidato a esquerda/direita, e só ao lado não é candidato a
+      // cima/baixo. Sem isso o centro decidia: a linha larga do canal tem o
+      // centro 5 px à direita do da busca, e Esquerda ia pra busca em vez
+      // das categorias; na grade, Cima no 1º filme ia pra categoria ao lado
+      // (bugs de 18/11 na LG).
+      var horizontal = direction === "left" || direction === "right";
+      if (horizontal ? overX && !overY : overY && !overX) return;
       var tie;
       if (direction === "right") {
         if (dx <= 1) return;
