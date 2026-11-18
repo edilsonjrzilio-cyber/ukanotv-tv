@@ -310,13 +310,44 @@
           }
         }
       }
-      SessionStore.saveCreds(latest);
-      // Conexão nova: recarrega o catálogo dela (igual trocar em Suas Listas).
-      if (mudouConexao && global.App) {
-        ContinueWatching.clearAll();
-        global.App.onLoggedIn();
-      }
+      // Sessão sem aparelho registrado (o registro falhou na hora de entrar,
+      // ex.: a TV não alcançou o painel naquele momento): registra agora.
+      // Sem isso o heartbeat nunca rodava, o painel mostrava "nunca entrou"
+      // com a TV navegando normal (caso real de 18/11, LG pelo Media Station
+      // X) e bloqueio/vencimento não chegavam. Mesma regra do Android e do
+      // iPhone.
+      var registro = latest.deviceId ? Promise.resolve(null) : registerThisDevice(latest, result, mac, username, panelPassword).catch(function () {
+        return null;
+      });
+      return registro.then(function (deviceAuth) {
+        if (!sameSession(SessionStore.loadCreds(), c)) return;
+        var registrou = !!(deviceAuth && deviceAuth.device && deviceAuth.device.id);
+        if (registrou) {
+          latest.deviceId = deviceAuth.device.id;
+          latest.customerId = latest.customerId || result.customer && result.customer.id || deviceAuth.customer && deviceAuth.customer.id || null;
+        }
+        SessionStore.saveCreds(latest);
+        // Já avisa o painel (sem esperar os 20 min do heartbeat).
+        if (registrou && global.App && global.App.heartbeatNow) global.App.heartbeatNow();
+        // Conexão nova: recarrega o catálogo dela (igual trocar em Suas Listas).
+        if (mudouConexao && global.App) {
+          ContinueWatching.clearAll();
+          global.App.onLoggedIn();
+        }
+      });
     }).catch(function () {});
+  }
+
+  // Registra este aparelho no painel pela sessão atual: pelo MAC (sessão do
+  // MAC) ou com o usuário e a senha do painel. null = sem como registrar.
+  function registerThisDevice(creds, result, mac, username, panelPassword) {
+    var slug = result.reseller && result.reseller.slug && result.reseller.slug.trim() || creds.resellerSlug;
+    var platform = window.Platform ? Platform.name : "webos sim";
+    var uid = DeviceIdentity.getDeviceUid(),
+      code = DeviceIdentity.getDeviceCode();
+    if (mac && !panelPassword) return PanelApi.registerDeviceByMac(slug, mac, uid, code, platform);
+    if (panelPassword && username) return PanelApi.registerDevice(slug, username, panelPassword, uid, code, platform);
+    return Promise.resolve(null);
   }
   function reportCustomList(entry) {
     if (entry.kind === "panel" || entry.serverId) return;
