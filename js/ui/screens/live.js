@@ -17,6 +17,7 @@
     activeCategory: FAV_CATEGORY_ID,
     selected: null,
     loading: true,
+    failed: false,
     query: ""
   };
   var previewVideo = null;
@@ -117,6 +118,60 @@
       return categoryId(ch.group) === state.activeCategory;
     });
   }
+
+  // Estilo das linhas de canal (também usado pela tela Favoritos, em "TV ao
+  // vivo", que pode abrir antes desta). Uma vez só.
+  function ensureStyles() {
+    if (document.querySelector("#live-style")) return;
+    var style = document.createElement("style");
+    style.id = "live-style";
+    style.textContent =
+    // min-width:0 + ellipsis no nome -- mesmo bug/mesma correção de
+    // contentGrid.js nesta sessão: categoria com nome comprido estourava
+    // a largura fixa de 280px do painel em vez de cortar com "...".
+    ".live-cat{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-align:left;}" + ".live-cat.active{background:var(--accent);color:#000;}" +
+    // Sem tingimento de fundo no foco aqui (diferente de contentGrid.js)
+    // -- LiveCategoryList.kt do Android só muda a BORDA no foco, o fundo
+    // é só binário ativo/não-ativo. Ativo+focado ganha borda BRANCA
+    // (antes sumia e o foco parecia ter desaparecido -- mesmo ajuste do
+    // Android).
+    ".live-cat.sn-focused{border-color:var(--accent);}" + ".live-cat.active.sn-focused{border-color:#fff !important;}" + ".live-cat .ic{flex-shrink:0;display:flex;color:#9AA2B1;}" + ".live-cat.active .ic{color:#000;}" +
+    // Quebra em até 2 linhas (não mais 1 linha + "...") -- regra: nome
+    // da categoria sempre aparece inteiro.
+    ".live-cat .label{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-cat .cnt{flex-shrink:0;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;font-size:11px;color:#9AA2B1;}" + ".live-cat.active .cnt{background:rgba(0,0,0,0.2);color:#000;}" + ".live-cat .chev{flex-shrink:0;display:flex;color:#6B7280;}" + ".live-cat.active .chev{color:#000;}" + ".live-cat-divider{height:1px;background:rgba(255,255,255,0.12);margin:6px 0;}" +
+    // Fundo tingido na cor do tema (não cinza chapado) ao focar/
+    // selecionar -- igual ChannelRow.kt (withAlpha(accent,0.18f) pra
+    // AMBOS "rowFocused || isSelected"). Vermelho FIXO só na borda de
+    // "selecionado" (não var(--accent)) -- no Android esse vermelho é
+    // hardcoded, propositalmente diferente da cor do tema, pra marcar
+    // "canal com prévia aberta" como um estado visual à parte de
+    // "categoria ativa" (que aí sim usa a cor do tema). Com tema
+    // vermelho isso passa despercebido, mas com qualquer outro tema
+    // (azul/verde/roxo/etc.) os dois ficavam se confundindo visualmente
+    // antes dessa correção.
+    ".live-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,0.03);border:2px solid transparent;cursor:pointer;}" + ".live-row.selected,.live-row.sn-focused{background:color-mix(in srgb,var(--accent) 18%,transparent);}" + "@supports not (background: color-mix(in srgb, red, blue)) { .live-row.selected,.live-row.sn-focused{background:rgba(225,29,72,0.18);} }" + ".live-row.selected{border-color:#E11D48 !important;}" +
+    // Numero do canal (posicao na lista, nao um campo do provedor --
+    // paridade com Android/Roku, pedido explicito). Largura fixa de 3
+    // digitos pra nao empurrar o resto da linha quando o indice troca
+    // de 2 pra 3 digitos.
+    // 36px = 4 dígitos (o número do servidor passa de mil).
+    ".live-row .num{width:36px;flex-shrink:0;color:#6B7280;font-size:12px;font-weight:500;}" + ".live-row .icon{width:40px;height:40px;border-radius:50%;background:#0B1220;display:flex;align-items:center;justify-content:center;color:#CBD5E1;font-weight:900;flex-shrink:0;overflow:hidden;}" + ".live-row .icon img{width:32px;height:32px;object-fit:contain;}" +
+    // Nome + categoria empilhados (igual ChannelRow do Android) -- antes
+    // só tinha o nome, fileira de canais ficava parecendo vazia demais
+    // numa coluna larga (pedido explícito: "o meio dos canal bem
+    // grande", ficava sem nada preenchendo o espaço).
+    ".live-row .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}" +
+    // Mesma regra do nome da categoria -- nome do canal sempre inteiro,
+    // quebra em até 2 linhas em vez de cortar.
+    ".live-row .name{color:#fff;font-size:15px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-row .group{color:#9AA2B1;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" + ".live-row .heart{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6B7280;}" +
+    // border-color sozinho não desenha nada sem border-style/width --
+    // faltava o "border:2px solid transparent" base acima; sem ele,
+    // esse border-color nunca tinha efeito nenhum (bug real: o anel
+    // vermelho de foco no coração nunca aparecia, só o genérico
+    // ".focusable.sn-focused" por baixo, na cor do TEMA, não vermelho).
+    ".live-row .heart.sn-focused{background:rgba(239,68,68,0.25) !important;border-color:#EF4444 !important;}" + ".epg-row{border-radius:10px;padding:10px 14px;margin-top:8px;background:rgba(255,255,255,0.03);}" + ".epg-row.now{background:rgba(225,29,72,0.12);}";
+    document.head.appendChild(style);
+  }
   function render() {
     var root = document.querySelector('.screen[data-screen="live"] .screen-content');
     root.innerHTML = '<div style="display:flex;flex-direction:column;height:100%;">' + ContentHeaderBar.html({
@@ -138,55 +193,7 @@
     // visível existem no DOM, posicionadas por cima de um "miolo" com a
     // altura da lista inteira.
     '    <div id="live-list" style="flex:1;min-width:0;overflow-y:auto;position:relative;" data-sn-scroll><div id="live-list-inner" style="position:relative;"></div></div>' + '    <div id="live-preview" style="width:320px;flex-shrink:0;padding:16px;overflow-y:auto;" data-sn-scroll></div>' + "  </div>" + "</div>";
-    if (!document.querySelector("#live-style")) {
-      var style = document.createElement("style");
-      style.id = "live-style";
-      style.textContent =
-      // min-width:0 + ellipsis no nome -- mesmo bug/mesma correção de
-      // contentGrid.js nesta sessão: categoria com nome comprido estourava
-      // a largura fixa de 280px do painel em vez de cortar com "...".
-      ".live-cat{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-align:left;}" + ".live-cat.active{background:var(--accent);color:#000;}" +
-      // Sem tingimento de fundo no foco aqui (diferente de contentGrid.js)
-      // -- LiveCategoryList.kt do Android só muda a BORDA no foco, o fundo
-      // é só binário ativo/não-ativo. Ativo+focado ganha borda BRANCA
-      // (antes sumia e o foco parecia ter desaparecido -- mesmo ajuste do
-      // Android).
-      ".live-cat.sn-focused{border-color:var(--accent);}" + ".live-cat.active.sn-focused{border-color:#fff !important;}" + ".live-cat .ic{flex-shrink:0;display:flex;color:#9AA2B1;}" + ".live-cat.active .ic{color:#000;}" +
-      // Quebra em até 2 linhas (não mais 1 linha + "...") -- regra: nome
-      // da categoria sempre aparece inteiro.
-      ".live-cat .label{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-cat .cnt{flex-shrink:0;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;font-size:11px;color:#9AA2B1;}" + ".live-cat.active .cnt{background:rgba(0,0,0,0.2);color:#000;}" + ".live-cat .chev{flex-shrink:0;display:flex;color:#6B7280;}" + ".live-cat.active .chev{color:#000;}" + ".live-cat-divider{height:1px;background:rgba(255,255,255,0.12);margin:6px 0;}" +
-      // Fundo tingido na cor do tema (não cinza chapado) ao focar/
-      // selecionar -- igual ChannelRow.kt (withAlpha(accent,0.18f) pra
-      // AMBOS "rowFocused || isSelected"). Vermelho FIXO só na borda de
-      // "selecionado" (não var(--accent)) -- no Android esse vermelho é
-      // hardcoded, propositalmente diferente da cor do tema, pra marcar
-      // "canal com prévia aberta" como um estado visual à parte de
-      // "categoria ativa" (que aí sim usa a cor do tema). Com tema
-      // vermelho isso passa despercebido, mas com qualquer outro tema
-      // (azul/verde/roxo/etc.) os dois ficavam se confundindo visualmente
-      // antes dessa correção.
-      ".live-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;background:rgba(255,255,255,0.03);border:2px solid transparent;cursor:pointer;}" + ".live-row.selected,.live-row.sn-focused{background:color-mix(in srgb,var(--accent) 18%,transparent);}" + "@supports not (background: color-mix(in srgb, red, blue)) { .live-row.selected,.live-row.sn-focused{background:rgba(225,29,72,0.18);} }" + ".live-row.selected{border-color:#E11D48 !important;}" +
-      // Numero do canal (posicao na lista, nao um campo do provedor --
-      // paridade com Android/Roku, pedido explicito). Largura fixa de 3
-      // digitos pra nao empurrar o resto da linha quando o indice troca
-      // de 2 pra 3 digitos.
-      ".live-row .num{width:28px;flex-shrink:0;color:#6B7280;font-size:12px;font-weight:500;}" + ".live-row .icon{width:40px;height:40px;border-radius:50%;background:#0B1220;display:flex;align-items:center;justify-content:center;color:#CBD5E1;font-weight:900;flex-shrink:0;overflow:hidden;}" + ".live-row .icon img{width:32px;height:32px;object-fit:contain;}" +
-      // Nome + categoria empilhados (igual ChannelRow do Android) -- antes
-      // só tinha o nome, fileira de canais ficava parecendo vazia demais
-      // numa coluna larga (pedido explícito: "o meio dos canal bem
-      // grande", ficava sem nada preenchendo o espaço).
-      ".live-row .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}" +
-      // Mesma regra do nome da categoria -- nome do canal sempre inteiro,
-      // quebra em até 2 linhas em vez de cortar.
-      ".live-row .name{color:#fff;font-size:15px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-row .group{color:#9AA2B1;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" + ".live-row .heart{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6B7280;}" +
-      // border-color sozinho não desenha nada sem border-style/width --
-      // faltava o "border:2px solid transparent" base acima; sem ele,
-      // esse border-color nunca tinha efeito nenhum (bug real: o anel
-      // vermelho de foco no coração nunca aparecia, só o genérico
-      // ".focusable.sn-focused" por baixo, na cor do TEMA, não vermelho).
-      ".live-row .heart.sn-focused{background:rgba(239,68,68,0.25) !important;border-color:#EF4444 !important;}" + ".epg-row{border-radius:10px;padding:10px 14px;margin-top:8px;background:rgba(255,255,255,0.03);}" + ".epg-row.now{background:rgba(225,29,72,0.12);}";
-      document.head.appendChild(style);
-    }
+    ensureStyles();
     ContentHeaderBar.bind(root, function () {
       Router.go("home");
     }, {
@@ -324,7 +331,9 @@
       return;
     }
     if (!channels.length) {
-      inner.innerHTML = '<div style="color:#9A9AA5;padding:24px;">Nenhum canal nesta categoria.</div>';
+      // Catálogo que não carregou mostra o erro (antes "Nenhum canal nesta
+      // categoria.", como se estivesse vazio).
+      inner.innerHTML = state.failed ? '<div style="color:#FCA5A5;padding:24px;">Não foi possível carregar os canais. Volte e abra de novo pra tentar outra vez.</div>' : '<div style="color:#9A9AA5;padding:24px;">Nenhum canal nesta categoria.</div>';
       return;
     }
     vList = {
@@ -360,8 +369,8 @@
       row.setAttribute("data-idx", String(idx));
       row.style.cssText = "position:absolute;left:" + LIST_PAD_X + "px;right:" + LIST_PAD_X + "px;top:" + (LIST_PAD_Y + idx * ROW_STRIDE) + "px;height:" + ROW_H + "px;box-sizing:border-box;";
       var isFav = favs.indexOf(ch.streamId) >= 0;
-      var num = String(idx + 1);
-      while (num.length < 3) num = "0" + num;
+      // Número do servidor (17/11), o que se digita no controle.
+      var num = ChannelNumber.pad3(ChannelNumber.displayNumber(ch, idx));
       row.innerHTML = '<div class="num">' + num + "</div>" + '<div class="icon">' + (ch.streamIcon ? '<img src="' + ch.streamIcon + '" />' : ch.name.charAt(0).toUpperCase()) + "</div>" + '<div class="info"><div class="name">' + ch.name + "</div>" + (ch.group ? '<div class="group">' + ch.group + "</div>" : "") + "</div>" +
       // #6B7280 (não "inherit") quando não favoritado -- igual
       // ChannelRow.kt (tint=Color(0xFF6B7280) no coração vazio); antes
@@ -403,7 +412,10 @@
             query: state.query,
             selectedId: ch.streamId
           }
-        }
+        },
+        // Lista aberta (categoria/busca) pra trocar de canal no player com
+        // Cima/Baixo, CH+/CH- e os números do controle.
+        channels: vList ? vList.channels : null
       });
       return;
     }
@@ -467,6 +479,60 @@
     } catch (e) {}
   }
 
+  // ===== Número digitado no controle (pedido de cliente, 17/11) =====
+  // O número do servidor (o do lado do nome), de qualquer categoria: vai
+  // pro canal já com a prévia; OK nele abre em tela cheia, igual escolher
+  // com as setas. Canal fora da categoria aberta: muda pra "Todos". Mesma
+  // regra do Android (LiveScreen.kt).
+  var listEntry = null;
+  var byNumber = {
+    map: {},
+    max: 0
+  };
+  var BACK_KEYS = [461, 10009, 8];
+  function goToChannelNumber(n) {
+    var ch = byNumber.map[n];
+    if (!ch) return;
+    var inList = vList && vList.channels.some(function (c) {
+      return c.streamId === ch.streamId;
+    });
+    if (!inList) {
+      state.activeCategory = "all";
+      state.query = "";
+      ContentHeaderBar.updateSearch(document.querySelector('.screen[data-screen="live"] .screen-content'), "");
+      renderCategories();
+      renderList();
+    }
+    if (!(state.selected && state.selected.streamId === ch.streamId)) selectOrPlay(ch);
+    focusChannel(ch.streamId);
+  }
+
+  // Na janela, antes da navegação (spatialnav.js escuta no document): o OK
+  // com número digitado não pode chegar no canal focado (abriria ele).
+  function onListKey(e) {
+    if (!listEntry || !byNumber.max) return;
+    var cur = SN.current();
+    // Só com o foco nas categorias/lista/prévia: na busca e no teclado da
+    // tela os números são texto.
+    if (!cur || !cur.closest || !cur.closest('.screen[data-screen="live"] #live-categories, .screen[data-screen="live"] #live-list, .screen[data-screen="live"] #live-preview')) return;
+    var digit = ChannelNumber.digitOfKey(e.keyCode);
+    var consumed = false;
+    if (digit !== null) {
+      listEntry.type(digit);
+      consumed = true;
+    } else if (listEntry.active() && e.keyCode === 13) {
+      listEntry.commitNow();
+      consumed = true;
+    } else if (listEntry.active() && BACK_KEYS.indexOf(e.keyCode) >= 0) {
+      listEntry.clear();
+      consumed = true;
+    }
+    if (consumed) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
   // TV mudou de app/entrou em espera: a prévia para de baixar o canal e
   // volta quando a tela aparece de novo.
   function onVisibilityChange() {
@@ -491,10 +557,27 @@
       activeCategory: restore && restore.activeCategory || FAV_CATEGORY_ID,
       selected: null,
       loading: true,
+      failed: false,
       query: restore && restore.query || ""
     };
     vList = null;
     render();
+    var liveRoot = document.querySelector('.screen[data-screen="live"] .screen-content');
+    byNumber = {
+      map: {},
+      max: 0
+    };
+    listEntry = ChannelNumber.createEntry({
+      maxNumber: function maxNumber() {
+        return byNumber.max;
+      },
+      channelFor: function channelFor(n) {
+        return byNumber.map[n] || null;
+      },
+      badge: ChannelNumber.createBadge(liveRoot, 90, true),
+      onCommit: goToChannelNumber
+    });
+    window.addEventListener("keydown", onListKey, true);
     var listEl = document.querySelector("#live-list");
     listEl.addEventListener("scroll", function () {
       if (vList) syncListWindow(null);
@@ -520,6 +603,7 @@
     XtreamApi.getLiveStreams(creds).then(function (channels) {
       state.channels = AdultGate.filterList(channels);
       state.loading = false;
+      byNumber = ChannelNumber.indexByNumber(state.channels);
       if (restore && restore.selectedId != null) {
         state.selected = state.channels.find(function (c) {
           return c.streamId === restore.selectedId;
@@ -538,16 +622,27 @@
       }
     }).catch(function () {
       state.loading = false;
+      state.failed = true;
+      // Aviso pro painel no próximo heartbeat (ver js/data/appReport.js).
+      if (global.AppReport) AppReport.recordError("catalog_failed");
       renderList();
     });
   }
   function unmount() {
     ContentHeaderBar.unbind();
+    window.removeEventListener("keydown", onListKey, true);
+    if (listEntry) {
+      listEntry.clear();
+      listEntry = null;
+    }
     document.removeEventListener("visibilitychange", onVisibilityChange);
     stopPreview();
     previewVideo = null;
     vList = null;
   }
+  global.LiveScreen = {
+    ensureStyles: ensureStyles
+  };
   Router.register("live", {
     mount: mount,
     unmount: unmount

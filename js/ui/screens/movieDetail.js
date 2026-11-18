@@ -96,13 +96,22 @@
   function goBack() {
     Router.go(back ? back.screen : "movies", back ? back.params : undefined);
   }
+
+  // Muda a cada mount/unmount: o catálogo que chega depois de a pessoa sair
+  // da tela não desenha nem puxa o foco pra cá.
+  var visit = 0;
   function mount(params) {
     back = params && params.back || null;
+    var myVisit = ++visit;
     var creds = SessionStore.loadCreds();
     var root = document.querySelector('.screen[data-screen="movieDetail"] .screen-content');
     root.innerHTML = '<div style="padding:60px;color:var(--accent);">Carregando…</div>';
+    // Voltar já vale no carregamento e no aviso de erro (antes só depois
+    // de o filme aparecer).
+    BackNav.bind(goBack);
     if (!creds) return;
     XtreamApi.getVod(creds).then(function (list) {
+      if (myVisit !== visit) return;
       var item = list.find(function (it) {
         return it.streamId === params.id;
       });
@@ -112,11 +121,19 @@
       }
       render(item, creds);
       SN.focusFirst(document.querySelector('.screen[data-screen="movieDetail"]'));
-      BackNav.bind(goBack);
+    }).catch(function () {
+      if (myVisit !== visit) return;
+      // Aviso pro painel no próximo heartbeat (ver js/data/appReport.js).
+      if (global.AppReport) AppReport.recordError("catalog_failed");
+      ContentGrid.showLoadError(root, "Não foi possível carregar este filme.", function () {
+        mount(params);
+      }, goBack);
     });
   }
   Router.register("movieDetail", {
     mount: mount,
-    unmount: function unmount() {}
+    unmount: function unmount() {
+      visit++;
+    }
   });
 })(window);

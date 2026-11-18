@@ -18,7 +18,9 @@
 
   // Setas, OK e Voltar (10009) já chegam sem registro. As outras precisam
   // ser registradas, senão a TV fica com elas (amarelo = favoritar).
-  var EXTRA_KEYS = ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaStop", "MediaFastForward", "MediaRewind", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue", "ChannelUp", "ChannelDown"];
+  var EXTRA_KEYS = ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaStop", "MediaFastForward", "MediaRewind", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue", "ChannelUp", "ChannelDown",
+  // Números: ir direto num canal no ao vivo (pedido de cliente, 17/11).
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
   function registerKeys() {
     var input = global.tizen && global.tizen.tvinputdevice;
     if (!input) return;
@@ -298,12 +300,27 @@
     if (!av || !el || !el.parentNode) return el;
     return new AvPlayVideo(el, av);
   }
+
+  // Para o AVPlay seja quem for que abriu (aviso de bloqueio, ver
+  // App.stopAllVideo). Sem nada aberto, stop/close só dão erro (ignorado).
+  function stopVideo() {
+    var av = global.webapis && global.webapis.avplay;
+    if (!av) return;
+    try {
+      av.stop();
+    } catch (e) {}
+    try {
+      av.close();
+    } catch (e) {}
+    document.documentElement.classList.remove("avplay-active");
+  }
   global.Platform = {
     // Vai no registro do aparelho no painel (/device/auth, campo platform).
     name: global.tizen ? "tizen samsung" : "tizen sim",
     init: init,
     exitApp: exitApp,
     fullscreenVideo: fullscreenVideo,
+    stopVideo: stopVideo,
     stableDeviceSeed: stableDeviceSeed
   };
 })(window);

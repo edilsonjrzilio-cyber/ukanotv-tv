@@ -1,7 +1,8 @@
 /*
  * Porta de tv-app/android/.../ui/favorites/FavoritesScreen.kt -- painel
- * lateral por tipo (TV ao vivo/Filmes/Séries) + grade com os registros
- * completos guardados no momento de favoritar (ver SessionStore.toggleFavorite).
+ * lateral por tipo (TV ao vivo/Filmes/Séries) + os registros completos
+ * guardados no momento de favoritar (ver SessionStore.toggleFavorite):
+ * TV ao vivo em linhas com coração (igual Ao vivo), Filmes/Séries em grade.
  */
 (function (global) {
   "use strict";
@@ -61,12 +62,18 @@
       return sum + SessionStore.listFavorites(p[0]).length;
     }, 0);
     grid.innerHTML = "";
+    // TV ao vivo em linhas, uma embaixo da outra; Filmes/Séries em grade.
+    grid.style.display = state.activeKind === "live" ? "block" : "flex";
     if (!totalAll) {
-      grid.innerHTML = '<div style="width:100%;text-align:center;padding:60px 0;color:#9A9AA5;"><div style="color:#fff;font-weight:700;font-size:16px;margin-bottom:6px;">Nenhum favorito ainda</div>Segure OK ou aperte o botão amarelo num card pra favoritar.</div>';
+      grid.innerHTML = '<div style="width:100%;text-align:center;padding:60px 0;color:#9A9AA5;"><div style="color:#fff;font-weight:700;font-size:16px;margin-bottom:6px;">Nenhum favorito ainda</div>Use o ♥ do canal, do filme ou da série pra favoritar.</div>';
       return;
     }
     if (!items.length) {
       grid.innerHTML = '<div style="width:100%;text-align:center;padding:60px 0;color:#9A9AA5;">Nenhum favorito aqui ainda.</div>';
+      return;
+    }
+    if (state.activeKind === "live") {
+      renderLiveRows(grid, items);
       return;
     }
     items.forEach(function (fav, index) {
@@ -141,6 +148,120 @@
       grid.appendChild(card);
     });
   }
+
+  // ===== TV ao vivo: linhas iguais às do Ao vivo (17/11) =====
+  // Número, logo, nome e coração, como em live.js (createChannelRow). OK na
+  // linha abre o canal; pra tirar dos favoritos vai pro lado até o coração
+  // e OK. Antes eram cartões em que segurar OK (ou o amarelo) tirava o
+  // favorito -- no Android o OK de abrir chegou a tirar. Sem "segurar OK"
+  // aqui de propósito.
+  // Canais do catálogo por id: número do servidor e categoria na linha
+  // (o favorito guardado só tem id, nome, logo e link).
+  var liveById = null;
+  function renderLiveRows(grid, items) {
+    if (global.LiveScreen) LiveScreen.ensureStyles();
+    items.forEach(function (fav, index) {
+      var ch = liveById ? liveById[String(fav.id)] : null;
+      var name = fav.name || ch && ch.name || "";
+      var cover = fav.cover || ch && ch.streamIcon || "";
+      var row = document.createElement("div");
+      row.className = "focusable live-row fav-live-row";
+      row.setAttribute("data-fav-id", String(fav.id));
+      // Mesma altura das linhas do Ao vivo (ROW_H/ROW_GAP de live.js).
+      row.style.cssText = "height:84px;box-sizing:border-box;margin-bottom:6px;";
+      row.innerHTML = '<div class="num">' + ChannelNumber.pad3(ChannelNumber.displayNumber(ch, index)) + "</div>" + '<div class="icon">' + (cover ? '<img src="' + cover + '" />' : (name.charAt(0) || "?").toUpperCase()) + "</div>" + '<div class="info"><div class="name">' + name + "</div>" + (ch && ch.group ? '<div class="group">' + ch.group + "</div>" : "") + "</div>" + '<button class="focusable heart" tabindex="-1" style="color:#EF4444;">' + Icon("heart-filled") + "</button>";
+      row.addEventListener("sn:enter", function () {
+        playLiveFavorite(fav);
+      });
+      row.querySelector(".heart").addEventListener("sn:enter", function (ev) {
+        ev.stopPropagation();
+        removeLiveFavorite(fav, index);
+      });
+      grid.appendChild(row);
+    });
+  }
+
+  // Tira o canal e foca a linha seguinte (que sobe pro lugar dele) ou, se
+  // era a última, a anterior; sem nenhuma, a categoria "TV ao vivo".
+  function removeLiveFavorite(fav, index) {
+    SessionStore.toggleFavorite("live", String(fav.id));
+    renderCategories();
+    renderGrid();
+    var rows = document.querySelectorAll("#fav-grid .fav-live-row");
+    var next = rows[Math.min(index, rows.length - 1)];
+    if (next) {
+      SN.setFocus(next);
+      return;
+    }
+    var cat = document.querySelector('#fav-categories [data-cat-id="live"]');
+    if (cat) SN.setFocus(cat);
+  }
+
+  // Busca (no cache em memória do catálogo, ver XtreamApi.cachedList) os
+  // canais pra completar número e categoria das linhas já desenhadas, sem
+  // redesenhar (o foco fica onde está).
+  function loadLiveIndex() {
+    var creds = SessionStore.loadCreds();
+    if (!creds || liveById) return;
+    XtreamApi.getLiveStreams(creds).then(function (list) {
+      var map = {};
+      (list || []).forEach(function (ch) {
+        map[String(ch.streamId)] = ch;
+      });
+      liveById = map;
+      if (Router.current() !== "favorites" || state.activeKind !== "live") return;
+      var rows = document.querySelectorAll("#fav-grid .fav-live-row");
+      for (var i = 0; i < rows.length; i++) {
+        var ch = map[rows[i].getAttribute("data-fav-id")];
+        if (!ch) continue;
+        rows[i].querySelector(".num").textContent = ChannelNumber.pad3(ChannelNumber.displayNumber(ch, i));
+        if (ch.group && !rows[i].querySelector(".group")) {
+          var group = document.createElement("div");
+          group.className = "group";
+          group.textContent = ch.group;
+          rows[i].querySelector(".info").appendChild(group);
+        }
+      }
+    }).catch(function () {});
+  }
+
+  // Canal favorito: link com o servidor ATUAL (igual currentUrl) e a lista
+  // dos canais favoritos que existem no catálogo atual, pra trocar com
+  // Cima/Baixo e os números no player (mesma regra do Android).
+  function playLiveFavorite(fav) {
+    function go(url, channels) {
+      if (url) global.App.play({
+        kind: "live",
+        id: fav.id,
+        title: fav.name,
+        poster: fav.cover,
+        url: url,
+        returnTo: "favorites",
+        returnParams: {
+          kind: "live"
+        },
+        channels: channels
+      });
+    }
+    var creds = SessionStore.loadCreds();
+    if (!creds) {
+      go(fav.url || null, null);
+      return;
+    }
+    XtreamApi.getLiveStreams(creds).then(function (items) {
+      var byId = {};
+      AdultGate.filterList(items || []).forEach(function (it) {
+        byId[String(it.streamId)] = it;
+      });
+      var channels = SessionStore.listFavorites("live").map(function (f) {
+        return byId[String(f.id)];
+      }).filter(Boolean);
+      var item = byId[String(fav.id)];
+      go(item ? XtreamApi.playableLiveUrl(creds, item) : fav.url || null, channels);
+    }).catch(function () {
+      go(fav.url || null, null);
+    });
+  }
   function currentUrl(kind, fav) {
     var creds = SessionStore.loadCreds();
     if (!creds) return Promise.resolve(fav.url || null);
@@ -157,10 +278,13 @@
   }
   function mount(params) {
     state.activeKind = params && params.kind || "live";
+    // A lista pode ter mudado (troca de servidor/lista) desde a última vez.
+    liveById = null;
     render();
     renderCategories();
     renderGrid();
     SN.focusFirst(document.querySelector('.screen[data-screen="favorites"]'));
+    loadLiveIndex();
   }
   Router.register("favorites", {
     mount: mount,

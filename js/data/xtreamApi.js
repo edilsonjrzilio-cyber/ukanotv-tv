@@ -227,11 +227,14 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     });
   }
   function fetchLiveStreamsNet(creds) {
+    // `num` = número do canal que o servidor manda (17/11: o mesmo dos
+    // outros apps e de todas as casas, o que aparece na lista e se digita no
+    // controle). M3U não tem: vale a posição na lista. Igual o Android.
     if (creds.mode === "m3u") {
       return M3uParser.loadPlaylistItems(creds).then(function (items) {
         return items.filter(function (it) {
           return it.kind === "live";
-        }).map(function (it) {
+        }).map(function (it, i) {
           return {
             streamId: it.id,
             name: it.name,
@@ -239,7 +242,8 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
             categoryId: it.group || "",
             categoryName: it.group,
             group: it.group,
-            url: it.url
+            url: it.url,
+            num: i + 1
           };
         });
       });
@@ -260,10 +264,31 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
           streamIcon: sanitizeCover(item.stream_icon, creds.url),
           categoryId: categoryId,
           categoryName: group,
-          group: group
+          group: group,
+          num: parseInt(item.num, 10) || 0
         });
       });
-      return out;
+      return numberChannels(out);
+    });
+  }
+
+  // Na ordem do número. Servidor que não manda o número (ou manda
+  // repetido): numera pela ordem em que ele mandou, que é a mesma do `num`.
+  function numberChannels(list) {
+    var seen = {};
+    var ok = list.every(function (ch) {
+      if (!(ch.num > 0) || seen[ch.num]) return false;
+      seen[ch.num] = true;
+      return true;
+    });
+    if (!ok) {
+      list.forEach(function (ch, i) {
+        ch.num = i + 1;
+      });
+      return list;
+    }
+    return list.slice().sort(function (a, b) {
+      return a.num - b.num;
     });
   }
   function extensionFromUrl(url, fallback) {

@@ -7,6 +7,12 @@
   "use strict";
 
   var PANEL_URL = "https://ukanotv.com";
+  // Caminho reserva até o painel (17/11): ukanolink.com só repassa
+  // /api/public/* pro painel (Worker na Cloudflare, código em
+  // infra/ukanolink-worker.js), com os mesmos caminhos. Caso real: uma rede
+  // que não alcançava o endereço do ukanotv.com ("No route to host"), com
+  // MAC e lista certos. Ver panelFetch.
+  var PANEL_FALLBACK_URL = "https://ukanolink.com";
   var REQUEST_TIMEOUT_MS = 35000;
   function normalizePanel(url) {
     var s = (url || "").trim();
@@ -20,39 +26,158 @@
     this.message = detail || code;
   }
   PanelError.prototype = Object.create(Error.prototype);
+
+  // O detalhe leva o tipo do erro junto (ex.: "TypeError: Failed to fetch",
+  // "AbortError: sem resposta em 8 s"): a tela de entrada mostra embaixo da
+  // frase amigável, pra dar pra achar a causa por uma foto da tela. Mesma
+  // regra do Android (failureDetail).
+  function failureDetail(e) {
+    if (!e) return "";
+    return ((e.name || "Error") + (e.message ? ": " + e.message : "")).slice(0, 160);
+  }
   function classifyFailure(e) {
-    if (e && e.name === "AbortError") return new PanelError("panel_timeout");
-    return new PanelError("panel_unreachable", e && e.message);
+    if (e && e.name === "AbortError") return new PanelError("panel_timeout", failureDetail(e));
+    return new PanelError("panel_unreachable", failureDetail(e));
   }
   function isRetryable(e) {
     return e.code === "panel_timeout" || e.code === "panel_unreachable" || e.code === "panel_bad_response";
+  }
+
+  // ===== Caminho reserva (porta de data/PanelFailover.kt do Android) =====
+  // Quando a CONEXÃO com um endereço falha (sem rota, DNS, recusada, tempo
+  // esgotado), o mesmo pedido vai pelo outro. Resposta do painel vale e não
+  // troca (403/404/503 incluídos) -- só 5xx vindo do reserva tenta o direto
+  // também (pode ser o repasse falhando). O que funcionou fica guardado, com
+  // a data, e vai primeiro nas próximas chamadas: não paga a espera do
+  // caminho ruim a cada vez.
+  var PANEL_HOST_KEY = "panel_host_v1";
+  // 1ª tentativa com prazo de 20 s no total; sem resposta, vai pro outro.
+  // O login pelo painel leva 3,4-7 s (medido em 17/11) e mais numa TV com
+  // rede lenta: com 8 s (antes) a TV desistia do direto à toa e passava a
+  // usar o reserva (Cloudflare, com teto diário). Erro de rede imediato
+  // (sem rota) troca na hora.
+  var FIRST_TRY_TIMEOUT_MS = 20000;
+  // Reserva guardado há mais de 24 h: tenta o direto primeiro de novo (a
+  // rede pode ter voltado ao normal); se falhar, o reserva responde e é
+  // gravado de novo.
+  var PRIMARY_RECHECK_MS = 24 * 60 * 60 * 1000;
+  function loadPreferredHost() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(PANEL_HOST_KEY) || "null");
+      if (saved && (saved.base === PANEL_URL || saved.base === PANEL_FALLBACK_URL)) return saved;
+    } catch (e) {}
+    return {
+      base: PANEL_URL,
+      at: 0
+    };
+  }
+  function reserveExpired(saved) {
+    if (saved.base === PANEL_URL) return false;
+    var age = Date.now() - (Number(saved.at) || 0);
+    // age < 0: o relógio da TV voltou (acertou a hora depois de gravar).
+    return age > PRIMARY_RECHECK_MS || age < 0;
+  }
+  function hostOrder() {
+    var saved = loadPreferredHost();
+    var first = reserveExpired(saved) ? PANEL_URL : saved.base;
+    return [first, first === PANEL_URL ? PANEL_FALLBACK_URL : PANEL_URL];
+  }
+
+  // Grava quem respondeu se mudou o preferido, ou se era a reconferência
+  // das 24 h e o reserva ganhou de novo (data nova).
+  function rememberHost(base) {
+    var saved = loadPreferredHost();
+    if (saved.base === base && !reserveExpired(saved)) return;
+    try {
+      localStorage.setItem(PANEL_HOST_KEY, JSON.stringify({
+        base: base,
+        at: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  // fetch com prazo. O prazo vira AbortError (panel_timeout em
+  // classifyFailure) com o tempo no detalhe; sem AbortController (TV
+  // antiga) o pedido só fica sem resposta e a gente segue.
+  function fetchWithTimeout(url, init, timeoutMs) {
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var opts = Object.assign({}, init);
+    if (ctrl) opts.signal = ctrl.signal;
+    var timer = null;
+    var deadline = new Promise(function (resolve, reject) {
+      timer = setTimeout(function () {
+        var err = new Error("sem resposta em " + Math.round(timeoutMs / 1000) + " s");
+        err.name = "AbortError";
+        // Rejeita antes de abortar: o erro que sai é este, com o tempo.
+        reject(err);
+        if (ctrl) {
+          try {
+            ctrl.abort();
+          } catch (e) {}
+        }
+      }, timeoutMs);
+    });
+    return Promise.race([fetch(url, opts), deadline]).then(function (res) {
+      clearTimeout(timer);
+      return res;
+    }, function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
+  }
+
+  // Pedido ao painel pelo caminho (/api/public/...), em cada endereço na
+  // ordem de hostOrder. Resolve com a resposta de quem respondeu; se nenhum
+  // respondeu, rejeita com a falha do 1º (o preferido: é ela que diz por
+  // que o painel não responde nesta rede), igual o Android.
+  function panelFetch(path, init, timeoutMs) {
+    var order = hostOrder();
+    var limit = timeoutMs || REQUEST_TIMEOUT_MS;
+    var firstFailure = null;
+    var reserveAnswer = null;
+    function tryAt(i) {
+      if (i >= order.length) return reserveAnswer ? Promise.resolve(reserveAnswer) : Promise.reject(firstFailure);
+      var base = order[i];
+      var last = i === order.length - 1;
+      return fetchWithTimeout(base + path, init, last ? limit : Math.min(FIRST_TRY_TIMEOUT_MS, limit)).then(function (res) {
+        if (res.status >= 500 && base !== PANEL_URL && !last) {
+          // O direto também não responder: fica valendo esta resposta.
+          reserveAnswer = res;
+          return tryAt(i + 1);
+        }
+        rememberHost(base);
+        return res;
+      }, function (e) {
+        if (!firstFailure) firstFailure = e;
+        return tryAt(i + 1);
+      });
+    }
+    return tryAt(0);
   }
 
   // POST com corpo JSON, tentando application/json primeiro e recaindo pra
   // text/plain numa 2a tentativa se a 1a falhar de forma "tentável de
   // novo" -- mesmas TV boxes/proxies que rejeitam o content-type silencio-
   // samente no Android podem existir aqui também.
-  function postJson(url, bodyObj, allowRetry) {
+  function postJson(path, bodyObj, allowRetry) {
     if (allowRetry === undefined) allowRetry = true;
     var bodyJson = JSON.stringify(bodyObj);
     function attempt(contentType) {
-      var ctrl = new AbortController();
-      var timer = setTimeout(function () {
-        ctrl.abort();
-      }, REQUEST_TIMEOUT_MS);
       var headers = {
         Accept: "application/json, text/plain, */*",
         "Cache-Control": "no-cache"
       };
       if (contentType) headers["Content-Type"] = contentType;
-      return fetch(url, {
+      return panelFetch(path, {
         method: "POST",
         headers: headers,
-        body: bodyJson,
-        signal: ctrl.signal
+        body: bodyJson
       }).then(function (res) {
-        clearTimeout(timer);
         return res.text().then(function (text) {
+          // Painel fora do ar (5xx) antes de olhar o corpo: a página de
+          // erro de um proxy no meio (502/504 em HTML) virava "formato
+          // inválido" em vez de "falha temporária".
+          if (res.status >= 500) throw new PanelError("panel_server_error", "http_" + res.status);
           if (!text) throw new PanelError("panel_bad_response", "empty_body");
           var parsed;
           try {
@@ -61,7 +186,6 @@
             throw new PanelError("panel_bad_response", text.slice(0, 120));
           }
           if (!res.ok) {
-            if (res.status >= 500) throw new PanelError("panel_server_error");
             // O painel responde recusas com 4xx + {"error": "..."}: antes
             // virava só "http_401" e a pessoa via uma mensagem genérica em
             // vez do motivo (senha errada, revendedor vencido...).
@@ -70,7 +194,6 @@
           return parsed;
         });
       }).catch(function (e) {
-        clearTimeout(timer);
         if (e instanceof PanelError) throw e;
         throw classifyFailure(e);
       });
@@ -80,26 +203,19 @@
       throw e;
     });
   }
-  function getJson(url) {
-    var ctrl = new AbortController();
-    var timer = setTimeout(function () {
-      ctrl.abort();
-    }, REQUEST_TIMEOUT_MS);
-    return fetch(url, {
-      method: "GET",
-      signal: ctrl.signal
+  function getJson(path) {
+    return panelFetch(path, {
+      method: "GET"
     }).then(function (res) {
-      clearTimeout(timer);
       return res.text().then(function (text) {
         var parsed = null;
         try {
           parsed = JSON.parse(text);
         } catch (e) {}
-        if (!res.ok) throw new PanelError("panel_server_error");
+        if (!res.ok) throw new PanelError("panel_server_error", "http_" + res.status);
         return parsed;
       });
     }).catch(function (e) {
-      clearTimeout(timer);
       if (e instanceof PanelError) throw e;
       throw classifyFailure(e);
     });
@@ -110,6 +226,13 @@
       if (pairs[k] !== null && pairs[k] !== undefined) obj[k] = pairs[k];
     });
     return obj;
+  }
+
+  // Versão do app no registro do aparelho (tela Dispositivos), a mesma do
+  // heartbeat. Antes ia sempre "1.0.0-lg".
+  function appVersion() {
+    var v = global.AppReport ? String(AppReport.version() || "").trim() : "";
+    return v ? v.slice(0, 40) : null;
   }
 
   // MAC deste aparelho (o da tela). Com usuário e senha o painel não procura
@@ -145,25 +268,25 @@
     return model ? "Samsung " + model : "TV Samsung";
   }
   function panelLogin(resellerSlug, username, password) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/customer/login";
+    var path = "/api/public/customer/login";
     var body = jsonBody({
       reseller_slug: resellerSlug.trim(),
       username: username.trim(),
       password: password.trim(),
       mac: thisDeviceMac()
     });
-    return postJson(url, body).then(function (res) {
+    return postJson(path, body).then(function (res) {
       if (!res.ok) throw new PanelError(res.error || res.message || "invalid_credentials");
       return res;
     });
   }
   function panelLoginByMac(resellerSlug, mac) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/customer/login";
+    var path = "/api/public/customer/login";
     var body = jsonBody({
       reseller_slug: resellerSlug && resellerSlug.trim() ? resellerSlug.trim() : null,
       mac: mac.trim()
     });
-    return postJson(url, body).then(function (res) {
+    return postJson(path, body).then(function (res) {
       if (!res.ok) throw new PanelError(res.error || res.message || "mac_not_found");
       return res;
     });
@@ -173,7 +296,7 @@
   // Quem entrou pelo MAC não tem senha do painel guardada e o painel
   // recusava a troca de servidor dele. Mesma regra do Android.
   function switchServer(resellerSlug, username, password, serverId, mac) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/customer/server";
+    var path = "/api/public/customer/server";
     var user = (username || "").trim();
     var pass = (password || "").trim();
     var byPassword = !!user && !!pass;
@@ -184,7 +307,7 @@
       mac: byPassword ? null : mac && String(mac).trim() || null,
       server_id: serverId
     });
-    return postJson(url, body).then(function (res) {
+    return postJson(path, body).then(function (res) {
       if (!res.ok) throw new PanelError(res.error || "invalid_credentials");
       return res;
     });
@@ -233,14 +356,14 @@
     code = code || "";
     return DEVICE_AUTH_REJECTIONS.indexOf(code) !== -1 || code.indexOf("account_") === 0 && code !== "account_not_found";
   }
-  function postDeviceAuth(url, body) {
-    return postJson(url, body, false).catch(function (e) {
+  function postDeviceAuth(path, body) {
+    return postJson(path, body, false).catch(function (e) {
       if (e && isDeviceAuthRejection(e.code)) throw e;
       return null;
     });
   }
   function registerDevice(resellerSlug, username, password, deviceUid, deviceCode, platform) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/auth";
+    var path = "/api/public/device/auth";
     var body = jsonBody({
       reseller_slug: resellerSlug.trim(),
       username: username.trim(),
@@ -253,12 +376,12 @@
       device_name: deviceName(),
       model: tvModel(),
       platform: platform,
-      app_version: "1.0.0-lg"
+      app_version: appVersion()
     });
-    return postDeviceAuth(url, body);
+    return postDeviceAuth(path, body);
   }
   function registerDeviceByMac(resellerSlug, mac, deviceUid, deviceCode, platform) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/auth";
+    var path = "/api/public/device/auth";
     var body = jsonBody({
       reseller_slug: resellerSlug.trim(),
       mac: mac.trim(),
@@ -267,9 +390,9 @@
       device_name: deviceName(),
       model: tvModel(),
       platform: platform,
-      app_version: "1.0.0-lg"
+      app_version: appVersion()
     });
-    return postDeviceAuth(url, body);
+    return postDeviceAuth(path, body);
   }
 
   // Listas deste aparelho em OUTROS revendedores (o mesmo MAC cadastrado lá
@@ -297,13 +420,13 @@
   // continua no painel daquele revendedor, só sem o MAC. Mesma regra do
   // Android (removeResellerList).
   function removeResellerList(mac, deviceUid, resellerSlug) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/customer/remove-reseller";
+    var path = "/api/public/customer/remove-reseller";
     var body = jsonBody({
       mac: String(mac || "").trim(),
       device_uid: deviceUid,
       reseller_slug: String(resellerSlug || "").trim()
     });
-    return postJson(url, body, false).then(function (res) {
+    return postJson(path, body, false).then(function (res) {
       if (!res || !res.ok) throw new PanelError(res && res.error || "panel_bad_response");
       return res;
     });
@@ -316,24 +439,32 @@
   // padrão deste aparelho (devices.preferred_dns) e manda ele primeiro no
   // próximo login (ver App.findWorkingDns). Mesma regra do Android.
   function deviceHeartbeat(deviceId, customerId, dns) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/heartbeat";
-    var ctrl = new AbortController();
-    var timer = setTimeout(function () {
-      ctrl.abort();
-    }, REQUEST_TIMEOUT_MS);
-    return fetch(url, {
+    var path = "/api/public/device/heartbeat";
+    // Avisos leves (17/11, ver js/data/appReport.js): versão do app, se o
+    // aparelho já abriu algum conteúdo (vai sempre) e as falhas desde o
+    // último heartbeat que o painel recebeu.
+    var report = global.AppReport ? AppReport.heartbeatFields() : {};
+    var sentErrors = report.errors && report.errors.length ? report.errors : null;
+    var body = jsonBody({
+      device_id: deviceId,
+      customer_id: customerId,
+      dns: dns || null,
+      app_version: report.app_version || null,
+      watched: typeof report.watched === "boolean" ? report.watched : null,
+      errors: sentErrors
+    });
+    function delivered() {
+      if (sentErrors && global.AppReport) AppReport.clearSent(sentErrors);
+    }
+    return panelFetch(path, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(jsonBody({
-        device_id: deviceId,
-        customer_id: customerId,
-        dns: dns || null
-      })),
-      signal: ctrl.signal
+      body: JSON.stringify(body)
     }).then(function (res) {
-      clearTimeout(timer);
+      // Recebido: as falhas mandadas saem da fila.
+      if (res.ok) delivered();
       if (res.status !== 403 && res.status !== 404) return null;
       return res.text().then(function (text) {
         // Só conta o que o NOSSO painel respondeu (JSON com "error"): antes
@@ -349,39 +480,41 @@
         // 404 not_found = o aparelho (ou o cliente) foi apagado no painel:
         // antes era ignorado e a sessão seguia pra sempre.
         if (res.status === 404) return code === "not_found" ? "account_not_found" : null;
+        // 403 do painel (bloqueio, conta...) já gravou os avisos antes de
+        // conferir o bloqueio: não manda de novo no próximo login.
+        delivered();
         return code;
       });
     }).catch(function () {
-      clearTimeout(timer);
       return null;
     });
   }
   function requestActivation(deviceUid, deviceMac, deviceCode, platform) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/activation";
+    var path = "/api/public/device/activation";
     var body = jsonBody({
       device_uid: deviceUid,
       mac: deviceMac,
       device_code: deviceCode,
       device_name: "UKANOTV",
       platform: platform,
-      app_version: "1.0.0-lg"
+      app_version: appVersion()
     });
-    return postJson(url, body);
+    return postJson(path, body);
   }
   function checkActivationStatus(deviceUid) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/activation?device_uid=" + encodeURIComponent(deviceUid);
-    return getJson(url);
+    var path = "/api/public/device/activation?device_uid=" + encodeURIComponent(deviceUid);
+    return getJson(path);
   }
   function fetchAssignedPlaylists(deviceUid) {
-    var url = normalizePanel(PANEL_URL) + "/api/public/device/playlist?device_uid=" + encodeURIComponent(deviceUid);
-    return getJson(url).then(function (res) {
+    var path = "/api/public/device/playlist?device_uid=" + encodeURIComponent(deviceUid);
+    return getJson(path).then(function (res) {
       return res && res.playlists || [];
     }).catch(function () {
       return [];
     });
   }
   function reportDevicePlaylist(deviceUid, mode, url, username, password, m3uUrl, label) {
-    var endpoint = normalizePanel(PANEL_URL) + "/api/public/device/playlist";
+    var path = "/api/public/device/playlist";
     var body = jsonBody({
       device_uid: deviceUid,
       label: label || null,
@@ -391,7 +524,7 @@
       password: password || null,
       m3u_url: m3uUrl || null
     });
-    return postJson(endpoint, body, false).catch(function () {
+    return postJson(path, body, false).catch(function () {
       return null;
     });
   }
@@ -401,8 +534,13 @@
   }
   function friendlyLoginError(msg) {
     switch (msg) {
+      // Só quando o painel disse que é isso (401 invalid_credentials).
       case "invalid_credentials":
         return "Código, usuário ou senha incorretos.";
+      // Formulário sem usuário/senha num aparelho sem MAC: não chegou a ir
+      // pro painel (antes aparecia "incorretos").
+      case "missing_credentials":
+        return "Preencha usuário e senha.";
       case "reseller_unavailable":
         return "Código inválido ou inativo.";
       case "reseller_expired":
@@ -411,18 +549,22 @@
         return "Sua assinatura expirou.";
       case "device_blocked":
         return "Este dispositivo foi bloqueado pelo revendedor.";
+      // Sem código digitado o painel procura o MAC em todos os revendedores:
+      // "nesse código" não fazia sentido.
       case "mac_not_found":
-        return "Este aparelho não está cadastrado nesse código de revendedor.";
+        return "Este aparelho (MAC) não está cadastrado no revendedor. Confira com ele o MAC que aparece na tela.";
       case "force_logout":
         return "Sua sessão foi encerrada pelo revendedor. Entre novamente.";
       case "panel_timeout":
         return "O painel demorou demais para responder. Tente novamente em alguns segundos.";
       case "panel_unreachable":
+        // navigator.onLine false = a TV mesmo está sem rede (Wi-Fi/cabo).
+        if (navigator.onLine === false) return "A TV está sem internet. Confira o Wi-Fi ou o cabo de rede e tente de novo.";
         return "A TV tem internet, mas não conseguiu alcançar o painel do app. Tente novamente.";
       case "panel_bad_response":
         return "O painel respondeu em formato inválido para esta TV. Tente novamente ou atualize o app.";
       case "panel_server_error":
-        return "O painel respondeu com falha temporária. Tente novamente em alguns segundos.";
+        return "O painel está fora do ar no momento (falha temporária). Tente novamente em alguns minutos.";
       case "no_playlist_configured":
         return "Nenhuma lista vinculada à sua conta.";
       case "account_not_found":
@@ -447,6 +589,16 @@
         if ((msg || "").indexOf("account_") === 0) return "Sua conta não está liberada. Fale com o seu revendedor.";
         return "Não foi possível entrar. Tente novamente.";
     }
+  }
+
+  // Detalhe técnico pra ir embaixo da frase amigável, só nas falhas de
+  // conexão (sem rota, tempo esgotado, resposta que não é do painel); ""
+  // nas outras.
+  var CONNECTION_FAILURES = ["panel_unreachable", "panel_timeout", "panel_bad_response"];
+  function connectionDetail(e) {
+    if (!e || CONNECTION_FAILURES.indexOf(e.code) === -1) return "";
+    var detail = String(e.message || "");
+    return detail && detail !== e.code ? detail : "";
   }
 
   // Extrai usuário/senha de uma m3u_url (http://host:port/get.php?username=...&password=...).
@@ -542,6 +694,8 @@
     PANEL_URL: PANEL_URL,
     PanelError: PanelError,
     normalizePanel: normalizePanel,
+    panelFetch: panelFetch,
+    connectionDetail: connectionDetail,
     panelLogin: panelLogin,
     panelLoginByMac: panelLoginByMac,
     switchServer: switchServer,

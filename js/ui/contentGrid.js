@@ -199,6 +199,7 @@
     var state = {
       items: [],
       loading: true,
+      failed: false,
       activeCategory: FAV_ID,
       query: "",
       sort: "recent"
@@ -675,7 +676,9 @@
       grid.innerHTML = "";
       grid.style.height = "";
       if (!items.length) {
-        grid.innerHTML = '<div style="color:#9A9AA5;">Nada por aqui ainda.</div>';
+        // Catálogo que não carregou mostra o erro (antes "Nada por aqui
+        // ainda.", como se a lista estivesse vazia).
+        grid.innerHTML = state.failed ? '<div style="color:#FCA5A5;">Não foi possível carregar o catálogo. Volte e abra de novo pra tentar outra vez.</div>' : '<div style="color:#9A9AA5;">Nada por aqui ainda.</div>';
         vState = null;
         return;
       }
@@ -725,6 +728,7 @@
       var restore = params && params.restore || null;
       state.items = [];
       state.loading = true;
+      state.failed = false;
       state.activeCategory = restore && restore.activeCategory || FAV_ID;
       state.query = restore && restore.query || "";
       state.sort = restore && restore.sort || "recent";
@@ -759,6 +763,9 @@
         if (hadCatFocus && activeCat) SN.setFocus(activeCat);
       }).catch(function () {
         state.loading = false;
+        state.failed = true;
+        // Aviso pro painel no próximo heartbeat (ver js/data/appReport.js).
+        if (global.AppReport) AppReport.recordError("catalog_failed");
         renderGrid();
       });
     }
@@ -769,8 +776,21 @@
       }
     });
   }
+
+  // Detalhe de Filme/Série cujo catálogo não carregou: aviso com "Tentar de
+  // novo" (foco começa nele) e "Voltar". Antes a tela ficava em
+  // "Carregando…" pra sempre. root = .screen-content da tela.
+  function showLoadError(root, message, onRetry, onBack) {
+    var btn = "display:flex;align-items:center;gap:8px;border:none;padding:14px 22px;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;";
+    root.innerHTML = '<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#050506;text-align:center;padding:0 60px;">' + '  <div style="font-size:34px;color:#EF4444;margin-bottom:14px;">' + Icon("warning") + "</div>" + '  <div style="color:#fff;font-size:20px;font-weight:800;">' + message + "</div>" + '  <div style="color:#9A9AA5;font-size:14px;margin-top:8px;">Confira a internet e tente de novo.</div>' + '  <div style="display:flex;gap:14px;margin-top:24px;">' + '    <button class="focusable" data-load-error="retry" style="' + btn + 'background:var(--accent);color:#000;">' + Icon("refresh") + " Tentar de novo</button>" + '    <button class="focusable" data-load-error="back" style="' + btn + 'background:rgba(255,255,255,0.08);color:#fff;">' + Icon("back") + " Voltar</button>" + "  </div>" + "</div>";
+    var retry = root.querySelector('[data-load-error="retry"]');
+    retry.addEventListener("sn:enter", onRetry);
+    root.querySelector('[data-load-error="back"]').addEventListener("sn:enter", onBack);
+    SN.setFocus(retry);
+  }
   global.ContentGrid = {
     create: create,
-    ensureCardStyles: ensureCardStyles
+    ensureCardStyles: ensureCardStyles,
+    showLoadError: showLoadError
   };
 })(window);

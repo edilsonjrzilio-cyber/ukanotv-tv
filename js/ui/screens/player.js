@@ -20,6 +20,30 @@
   var zoomLevel = 1; // 0=Ajustar(FIT) 1=Zoom(preenche, padrão) 2=Zoom+(preenche e escala mais)
   var isFavorite = false;
 
+  // Troca de canal no ao vivo (pedido de 17/11, igual o Android): Baixo =
+  // próximo canal da lista de onde ele foi aberto, Cima = anterior, dando a
+  // volta nas pontas; CH+/CH- e os números do controle também. O nome
+  // aparece na hora e o player novo só abre quando a pessoa para de apertar
+  // (senão cada toque abria uma conexão com o provedor -- lição dos 26
+  // saltos do avançar, 25/10).
+  var ZAP_COMMIT_MS = 700;
+  // CH+/CH-: 427/428 na Samsung (registradas em platform.js); 33/34 na LG
+  // (versão Media Station X).
+  var KEY_CH_UP = [427, 33];
+  var KEY_CH_DOWN = [428, 34];
+  var zapList = null;
+  var zapTarget = -1;
+  var zapTimer = null;
+  var zapBadge = null;
+  var channelEntry = null;
+  // Todos os canais (pra digitar o número de qualquer categoria) e o mapa
+  // número do servidor -> canal.
+  var allLive = null;
+  var liveByNumber = {
+    map: {},
+    max: 0
+  };
+
   // Porta de PlayerScreen.kt/seekStepForRepeat -- segurar ESQUERDA/DIREITA
   // acelera (10s nos 2 primeiros repeats, 20s até o 6º, 40s depois). Usa
   // e.repeat (padrão web, não contagem própria) -- em controles/firmwares
@@ -60,12 +84,50 @@
       "#player-next{display:none;position:absolute;right:24px;bottom:" + NEXT_CARD_BOTTOM_PX + "px;max-width:380px;min-width:240px;box-sizing:border-box;padding:14px 18px;background:rgba(0,0,0,0.8);border:3px solid var(--accent);border-radius:12px;cursor:pointer;}" + "#player-next.osd-up{bottom:" + NEXT_CARD_BOTTOM_OSD_PX + "px;}";
       document.head.appendChild(style);
     }
-
+    video = root.querySelector("#player-video");
     // Na LG é o próprio <video>; na Samsung, o AVPlay com a mesma interface
     // (toca MKV/TS que o <video> não toca) -- ver js/lib/platform.js.
-    video = root.querySelector("#player-video");
     if (global.Platform) video = Platform.fullscreenVideo(video);
     root.querySelector("#player-title").textContent = request.title || "";
+    zapList = request.kind === "live" && request.channels && request.channels.length > 1 ? request.channels : null;
+    zapTarget = -1;
+    zapBadge = ChannelNumber.createBadge(root.firstElementChild, 84, false);
+    allLive = null;
+    liveByNumber = {
+      map: {},
+      max: 0
+    };
+    channelEntry = request.kind === "live" ? ChannelNumber.createEntry({
+      maxNumber: function maxNumber() {
+        return liveByNumber.max;
+      },
+      channelFor: function channelFor(n) {
+        return liveByNumber.map[n] || null;
+      },
+      badge: zapBadge,
+      onCommit: function onCommit(n) {
+        var ch = liveByNumber.map[n];
+        if (!ch || String(ch.streamId) === String(request.id)) return;
+        var idx = -1;
+        if (zapList) {
+          for (var i = 0; i < zapList.length; i++) {
+            if (String(zapList[i].streamId) === String(ch.streamId)) {
+              idx = i;
+              break;
+            }
+          }
+        }
+        zapBadge.show(ChannelNumber.pad3(n), ch.name, false);
+        if (idx >= 0) {
+          zapTarget = idx;
+          openZapTarget(idx);
+        } else {
+          // Fora da lista de onde abriu: Cima/Baixo seguem pela lista
+          // inteira, na ordem dos números, e Voltar cai em "Todos".
+          openLiveChannel(ch, allLive, true);
+        }
+      }
+    }) : null;
     root.querySelector("#player-back").addEventListener("sn:enter", goBack);
     root.querySelector("#player-rew").addEventListener("sn:enter", function () {
       seekBy(-10);
@@ -87,6 +149,17 @@
     // `recovering` ligada e a PRÓXIMA reprodução ficava em "Carregando…"
     // pra sempre.
     var s = sess = newSession();
+    if (request.kind === "live") {
+      // Lista inteira (já em memória depois do Ao vivo) pros números.
+      var listCreds = SessionStore.loadCreds();
+      if (listCreds) {
+        XtreamApi.getLiveStreams(listCreds).then(function (list) {
+          if (!s.alive) return;
+          allLive = AdultGate.filterList(list || []);
+          liveByNumber = ChannelNumber.indexByNumber(allLive);
+        }).catch(function () {});
+      }
+    }
     video.addEventListener("playing", function () {
       if (s.alive) onPlaying(s);
     });
@@ -161,8 +234,35 @@
     // comum: só assistindo e querendo adiantar), busca direto.
     SN.setKeyInterceptor(function (e) {
       if (handleMediaKey(e.keyCode)) return true;
+      if (channelEntry) {
+        var digit = ChannelNumber.digitOfKey(e.keyCode);
+        if (digit !== null) {
+          typeChannelDigit(digit);
+          return true;
+        }
+        if (e.keyCode === 13 && channelEntry.active()) {
+          channelEntry.commitNow();
+          return true;
+        }
+      }
+      if (zapList) {
+        if (KEY_CH_UP.indexOf(e.keyCode) >= 0) {
+          zap(1);
+          return true;
+        }
+        if (KEY_CH_DOWN.indexOf(e.keyCode) >= 0) {
+          zap(-1);
+          return true;
+        }
+      }
       var cur = SN.current();
       var inTopbar = !!(cur && cur.closest && cur.closest("#player-topbar"));
+      // Ao vivo: Cima/Baixo trocam de canal (fora da barra de cima, onde a
+      // seta pra baixo volta pro ⏸).
+      if (zapList && !inTopbar && (e.keyCode === 38 || e.keyCode === 40)) {
+        zap(e.keyCode === 40 ? 1 : -1);
+        return true;
+      }
       if (e.keyCode === 13) {
         // O OK que pulou pro próximo episódio ainda está apertado: as
         // repetições dele (e o keyup) chegariam no player novo como "OK no
@@ -179,6 +279,19 @@
       }
       if (e.keyCode !== 37 && e.keyCode !== 39) return false;
       if (inTopbar) return false;
+      // Ao vivo não tem avançar/voltar: esquerda/direita levam pra barra de
+      // cima (zoom/favoritar), já que Cima/Baixo ficaram pra trocar de canal
+      // -- igual o Android.
+      if (request.kind === "live") {
+        var zoomBtn = document.querySelector("#player-zoom");
+        if (zoomBtn) SN.setFocus(zoomBtn);
+        return true;
+      }
+      // Com o foco no ⏪/⏩ a seta MOVE o foco (volta pro ⏸). Antes buscava
+      // com o foco em qualquer botão de baixo: quem chegava no ⏩ não
+      // conseguia mais voltar pro pausar. Busca direto só com o foco no ⏸
+      // ou solto, igual o Android (setas navegam com botão focado).
+      if (cur && cur.id !== "player-play" && cur.closest && cur.closest("#player-osd")) return false;
       var dir = e.keyCode === 37 ? "left" : "right";
       if (!e.repeat) seekRepeatCount[dir] = 0;
       var step = seekStepForRepeat(seekRepeatCount[dir]);
@@ -192,8 +305,97 @@
     // direto, deixando o handler da tela anterior (ex.: movieDetail)
     // ainda attached por baixo -- Voltar no Player disparava os DOIS,
     // navegando duas vezes (bug real encontrado na auditoria).
-    BackNav.bind(goBack);
+    // Voltar com número pela metade só desiste do número.
+    BackNav.bind(function () {
+      if (channelEntry && channelEntry.active()) {
+        channelEntry.clear();
+        return;
+      }
+      goBack();
+    });
     showOsd();
+    // Abre com o foco no ⏸: antes nenhum botão ficava marcado e o OK não
+    // fazia nada até a pessoa apertar uma seta.
+    focusPlayButton();
+  }
+  function focusPlayButton() {
+    var play = document.querySelector("#player-play");
+    if (play) SN.setFocus(play, {
+      silent: true
+    });
+  }
+  function currentZapIndex() {
+    if (zapTarget >= 0) return zapTarget;
+    for (var i = 0; i < zapList.length; i++) {
+      if (String(zapList[i].streamId) === String(request.id)) return i;
+    }
+    return -1;
+  }
+  function zap(step) {
+    if (!zapList) return;
+    if (channelEntry) channelEntry.clear();
+    var base = currentZapIndex();
+    if (base < 0) return;
+    var n = zapList.length;
+    zapTarget = ((base + step) % n + n) % n;
+    zapBadge.show(ChannelNumber.pad3(ChannelNumber.displayNumber(zapList[zapTarget], zapTarget)), zapList[zapTarget].name, false);
+    if (zapTimer) clearTimeout(zapTimer);
+    zapTimer = setTimeout(function () {
+      zapTimer = null;
+      openZapTarget(zapTarget);
+    }, ZAP_COMMIT_MS);
+  }
+  function typeChannelDigit(digit) {
+    if (zapTimer) {
+      clearTimeout(zapTimer);
+      zapTimer = null;
+    }
+    if (zapTarget >= 0) {
+      zapTarget = -1;
+      zapBadge.hide();
+    }
+    channelEntry.type(digit);
+  }
+
+  // Abre o canal pelo mesmo caminho do próximo episódio: Router.go desmonta
+  // este player e monta um novo do zero. Voltar cai na lista com o canal
+  // novo selecionado.
+  function openZapTarget(idx) {
+    openLiveChannel(zapList && zapList[idx], zapList, false);
+  }
+
+  // toAll: o canal veio de fora da lista de onde abriu (número digitado):
+  // Voltar cai em "Todos", com ele selecionado.
+  function openLiveChannel(ch, list, toAll) {
+    var creds = SessionStore.loadCreds();
+    if (!ch || !creds) return;
+    var old = request.returnParams || {};
+    var returnParams = {};
+    Object.keys(old).forEach(function (k) {
+      returnParams[k] = old[k];
+    });
+    if (old.restore) {
+      var restore = {};
+      Object.keys(old.restore).forEach(function (k) {
+        restore[k] = old.restore[k];
+      });
+      restore.selectedId = ch.streamId;
+      if (toAll) {
+        restore.activeCategory = "all";
+        restore.query = "";
+      }
+      returnParams.restore = restore;
+    }
+    Router.go("player", {
+      kind: "live",
+      id: ch.streamId,
+      title: ch.name,
+      poster: ch.streamIcon,
+      url: XtreamApi.playableLiveUrl(creds, ch),
+      returnTo: request.returnTo,
+      returnParams: returnParams,
+      channels: list
+    });
   }
 
   // Porta de PlayerScreen.kt/zoomLevel -- 0=Ajustar(FIT, mostra a imagem
@@ -429,6 +631,9 @@
     s.playedAt = Date.now();
     s.lastProgressAt = Date.now();
     updateNextCard(s);
+    // 1ª vez que algo toca neste aparelho desde a instalação: "Já assistiu"
+    // no painel na hora (ver js/data/appReport.js e App.heartbeatNow).
+    if (global.AppReport && AppReport.markWatched() && global.App && App.heartbeatNow) App.heartbeatNow();
   }
   function onFailure(s) {
     if (!s.alive || s.failing) return;
@@ -438,6 +643,9 @@
     clearTimeout(s.attemptTimer);
     var playedLong = s.playedAt && Date.now() - s.playedAt > 20000;
     if (playedLong) s.sameUrlRetries = 0;
+    // Desde quando só falha (zera quando toca por um tempo) -- ver o limite
+    // mais abaixo.
+    if (playedLong) s.failingSince = 0;else if (!s.failingSince) s.failingSince = Date.now();
     // Caiu depois de tocar: tenta a MESMA url antes de mudar. Uma queda no
     // meio do vídeo quase sempre é da rede, não do formato -- pular pra
     // próxima variação trocava uma fonte que funcionava por outra que nem
@@ -454,7 +662,12 @@
     s.playedAt = 0;
     // Nunca chegou a tocar e passou do limite: para e avisa (sem deixar a
     // última tentativa rodando por trás da mensagem).
-    if (!s.everPlayed && Date.now() - s.startedAt > (request.kind === "live" ? 70000 : 90000)) {
+    // Filme/episódio que já tocou e parou de abrir (link que morreu no
+    // provedor) também desiste: antes o limite valia só antes de tocar pela
+    // 1ª vez e depois ficava em "Reconectando…" pra sempre. Ao vivo segue
+    // tentando sem limite de propósito (o canal volta).
+    var capMs = request.kind === "live" ? 70000 : 90000;
+    if (!s.everPlayed && Date.now() - s.startedAt > capMs || request.kind !== "live" && s.failingSince && Date.now() - s.failingSince > capMs) {
       stopVideo();
       showPlaybackError();
       return;
@@ -507,23 +720,40 @@
   function onEnded(s) {
     var duration = video && video.duration > 0 && isFinite(video.duration) ? video.duration : s.lastDuration;
     var position = Math.max(video ? video.currentTime : 0, s.lastGoodTime);
-    if (request.kind !== "live" && duration > 0 && position >= duration * 0.95) {
-      if (nextEpisode) {
-        playNextEpisode();
+    if (request.kind !== "live") {
+      if (isRealVodEnd(position, duration, s.lastEarlyEnd)) {
+        if (nextEpisode) {
+          playNextEpisode();
+          return;
+        }
+        ContinueWatching.remove(request.id, request.kind);
+        // Marca como concluído aqui também (não só via onProgress ao atingir
+        // 95%) -- o "ended" pode chegar antes do próximo tick de 5s.
+        ContinueWatching.markCompleted({
+          id: request.id,
+          kind: request.kind,
+          seriesId: request.seriesId
+        });
+        goBack(true);
         return;
       }
-      ContinueWatching.remove(request.id, request.kind);
-      // Marca como concluído aqui também (não só via onProgress ao atingir
-      // 95%) -- o "ended" pode chegar antes do próximo tick de 5s.
-      ContinueWatching.markCompleted({
-        id: request.id,
-        kind: request.kind,
-        seriesId: request.seriesId
-      });
-      goBack(true);
-      return;
+      s.lastEarlyEnd = position;
     }
     onFailure(s);
+  }
+
+  // Fim sem erro de filme/episódio: é o fim de verdade? Antes só valia com
+  // duração conhecida e 95% assistido; fora disso virava queda e ficava em
+  // "Reconectando…" pra sempre no fim do filme. Também é fim quando, com
+  // pelo menos 1 min de vídeo: a duração é desconhecida, ou o arquivo acabou
+  // duas vezes seguidas no mesmo ponto (o arquivo do provedor termina ali).
+  // Tempos em segundos. Mesma regra nos 6 apps (isRealVodEnd no Android).
+  function isRealVodEnd(position, duration, lastEarlyEnd) {
+    var known = duration > 0 && isFinite(duration);
+    if (known && position >= duration * 0.95) return true;
+    if (!(position >= 60)) return false;
+    if (!known) return true;
+    return typeof lastEarlyEnd === "number" && Math.abs(position - lastEarlyEnd) <= 5;
   }
 
   // ===== Próximo episódio (só série) =====
@@ -676,6 +906,8 @@
     stopVideo();
   }
   function showPlaybackError() {
+    // Aviso pro painel junto do próximo heartbeat (ver js/data/appReport.js).
+    if (global.AppReport) AppReport.recordError("playback_failed");
     var spinner = document.querySelector("#player-spinner");
     if (!spinner) return;
     spinner.textContent = "Não foi possível reproduzir este conteúdo.";
@@ -757,6 +989,10 @@
       osd.style.display = "none";
       topbar.style.display = "none";
       if (nextCard) nextCard.classList.remove("osd-up");
+      // Controles sumiram: foco volta pro ⏸, igual o Android devolve o foco
+      // pro vídeo. Antes ficava no botão escondido (ex.: ⏩) e o OK de
+      // pausar avançava 10s.
+      focusPlayButton();
     }, 5000);
   }
 
@@ -773,6 +1009,15 @@
       seekCommitTimer = null;
     }
     pendingSeek = null;
+    // Saiu com uma troca de canal na fila: descarta.
+    if (zapTimer) {
+      clearTimeout(zapTimer);
+      zapTimer = null;
+    }
+    if (channelEntry) {
+      channelEntry.clear();
+      channelEntry = null;
+    }
     if (progressTimer) {
       clearInterval(progressTimer);
       progressTimer = null;
@@ -804,6 +1049,16 @@
     cleanup();
     video = null;
   }
+
+  // Aviso de bloqueio do painel por cima (App.onSessionBlocked): para o
+  // vídeo e as tentativas de reconexão na hora, e devolve as teclas pro
+  // aviso. Sem isso o vídeo seguia (ou voltava) tocando atrás dele.
+  // Seguro chamar com o player fechado.
+  global.PlayerScreen = {
+    stop: function stop() {
+      cleanup();
+    }
+  };
   Router.register("player", {
     mount: mount,
     unmount: unmount

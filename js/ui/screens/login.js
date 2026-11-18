@@ -37,7 +37,9 @@
     if (!document.querySelector("#login-style")) {
       var style = document.createElement("style");
       style.id = "login-style";
-      style.textContent = ".login-info-card{background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 16px;}" + ".login-info-label{color:var(--subtext);font-size:13px;font-weight:700;}" + ".login-info-value{color:#fff;font-size:16px;font-weight:800;margin-top:2px;}" + ".login-field{height:58px;border-radius:12px;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.1);color:#fff;font-size:17px;text-align:left;padding:0 18px;cursor:pointer;}" + ".login-field.sn-focused{border-color:var(--accent);}" + ".login-field .fl{color:var(--subtext);font-size:12px;display:block;}" + ".login-field .fv{font-weight:700;}";
+      style.textContent = ".login-info-card{background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 16px;}" + ".login-info-label{color:var(--subtext);font-size:13px;font-weight:700;}" + ".login-info-value{color:#fff;font-size:16px;font-weight:800;margin-top:2px;}" + ".login-field{height:58px;border-radius:12px;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.1);color:#fff;font-size:17px;text-align:left;padding:0 18px;cursor:pointer;}" + ".login-field.sn-focused{border-color:var(--accent);}" + ".login-field .fl{color:var(--subtext);font-size:12px;display:block;}" + ".login-field .fv{font-weight:700;}" +
+      // Detalhe técnico da falha de conexão, embaixo da frase (ver showError).
+      ".login-detail{margin-top:6px;font-size:12px;opacity:0.75;word-break:break-word;}";
       document.head.appendChild(style);
     }
     syncFields();
@@ -84,9 +86,37 @@
     });
     elements.submit.addEventListener("sn:enter", submit);
   }
-  function showError(msg) {
-    elements.error.textContent = msg;
-    elements.error.style.display = msg ? "block" : "none";
+
+  // msg = frase amigável; detail = detalhe técnico (menor, embaixo, entre
+  // parênteses); info = aviso neutro (cinza) em vez de erro (vermelho).
+  function showError(msg, detail, info) {
+    var box = elements.error;
+    box.innerHTML = "";
+    if (!msg) {
+      box.style.display = "none";
+      return;
+    }
+    box.style.background = info ? "rgba(255,255,255,0.05)" : "rgba(239,68,68,0.1)";
+    box.style.borderColor = info ? "rgba(255,255,255,0.15)" : "rgba(239,68,68,0.25)";
+    box.style.color = info ? "#CBD5E1" : "#FCA5A5";
+    var main = document.createElement("div");
+    main.textContent = msg;
+    box.appendChild(main);
+    if (detail) {
+      var small = document.createElement("div");
+      small.className = "login-detail";
+      small.textContent = "(Detalhe: " + detail + ")";
+      box.appendChild(small);
+    }
+    box.style.display = "block";
+  }
+
+  // Causa real da falha (frase por tipo, ver PanelApi.friendlyLoginError)
+  // e, nas falhas de conexão com o painel, o detalhe técnico embaixo -- pra
+  // dar pra achar a causa por uma foto da tela (mesma regra do Android).
+  function showLoginError(e) {
+    var code = e && e.code || e && e.message || "unknown_error";
+    showError(PanelApi.friendlyLoginError(code), PanelApi.connectionDetail(e), false);
   }
 
   // Monta a sessão de um login no painel (código + usuário e senha, ou MAC)
@@ -139,24 +169,113 @@
       return creds;
     });
   }
-  function tryMacLogin(mac) {
+
+  // ===== Login pelo MAC sozinho (17/11) =====
+  // Ao abrir a tela e, enquanto ela está aberta, a cada 8 s e quando o app
+  // volta a aparecer: quem acabou de ter o MAC cadastrado pelo revendedor
+  // entra sem fazer nada. Não tenta com o teclado aberto, com algo digitado
+  // no formulário (login à mão) nem com o Entrar em andamento; nem nesta
+  // visita depois de "Sair da conta"/aviso de bloqueio (skipAutoMacOnce),
+  // senão a pessoa voltava sozinha pra conta de que acabou de sair.
+  var AUTO_MAC_MS = 8000;
+  // Muda a cada mount/unmount: resposta de uma visita anterior é ignorada.
+  var visit = 0;
+  // Muda a cada Entrar: a resposta atrasada de uma tentativa automática
+  // não passa por cima do login à mão.
+  var manualSeq = 0;
+  var auto = {
+    enabled: false,
+    timer: null,
+    busy: false,
+    lastFailKind: null
+  };
+  var NOT_REGISTERED_HINT = "Este aparelho ainda não está cadastrado. Quando o revendedor cadastrar o MAC acima, o app entra sozinho. Se preferir, entre com código, usuário e senha.";
+  function keyboardOpen() {
+    var kb = document.getElementById("kb-overlay");
+    return !!kb && kb.style.display === "flex";
+  }
+  function typedSomething() {
+    return !!(state.code || state.username || state.password);
+  }
+
+  // Uma tentativa pelo MAC, sem código (o painel acha o revendedor). Só
+  // grava a sessão se ainda vale (mesma visita, sem Entrar no meio).
+  // Resolve true se entrou; na falha mostra o motivo no formulário.
+  function runMacLogin(mac) {
+    var myVisit = visit;
+    var mySeq = manualSeq;
+    // O estado DESTA visita (o mount cria outro): uma resposta atrasada não
+    // mexe no "ocupado" da visita seguinte.
+    var mine = auto;
+    mine.busy = true;
     return PanelApi.panelLoginByMac(null, mac).then(function (result) {
-      return finishResellerLogin(null, result.customer && result.customer.username || "", "", result, mac);
-    }).then(function () {
+      return resellerSession(null, result.customer && result.customer.username || "", "", result, mac);
+    }).then(function (creds) {
+      mine.busy = false;
+      if (myVisit !== visit || mySeq !== manualSeq) return false;
+      SessionStore.saveCreds(creds);
+      mine.enabled = false;
+      global.App.onLoggedIn();
       return true;
-    }).catch(function (e) {
-      // Aparelho bloqueado/limite de telas no registro: mostra o motivo no
-      // formulário (antes caía nele mudo, sem explicar nada).
-      var code = e && e.code;
-      if (code && code !== "mac_not_found" && code.indexOf("panel_") !== 0 && code.indexOf("http_") !== 0) {
-        showError(PanelApi.friendlyLoginError(code));
-      }
+    }, function (e) {
+      mine.busy = false;
+      if (myVisit !== visit || mySeq !== manualSeq) return false;
+      showAutoFailure(e);
       return false;
     });
+  }
+  function showAutoFailure(e) {
+    var code = e && e.code || "unknown_error";
+    // A cada 8 s vem o mesmo motivo de novo: pro painel conta uma vez só
+    // por motivo, por visita à tela.
+    var kind = AppReport.loginFailureKind(code);
+    if (kind !== auto.lastFailKind) {
+      auto.lastFailKind = kind;
+      AppReport.recordLoginFailure(code);
+    }
+    // MAC ainda não cadastrado é o normal de quem vai entrar digitando:
+    // aviso neutro, não erro.
+    if (code === "mac_not_found") {
+      showError(NOT_REGISTERED_HINT, "", true);
+      return;
+    }
+    showLoginError(e);
+  }
+  function scheduleAutoMac() {
+    if (auto.timer) {
+      clearTimeout(auto.timer);
+      auto.timer = null;
+    }
+    if (auto.enabled) auto.timer = setTimeout(autoMacTick, AUTO_MAC_MS);
+  }
+  function autoMacTick() {
+    auto.timer = null;
+    if (!auto.enabled) return;
+    var mac = DeviceIdentity.getDeviceMac();
+    if (!mac) return;
+    if (auto.busy || elements.submit.disabled || keyboardOpen() || typedSomething() || document.hidden) {
+      scheduleAutoMac();
+      return;
+    }
+    runMacLogin(mac).then(function (ok) {
+      if (!ok) scheduleAutoMac();
+    });
+  }
+
+  // Voltou pro app (estava em outro app/em espera): tenta já, o revendedor
+  // pode ter cadastrado nesse meio tempo.
+  function onVisibilityChange() {
+    if (document.hidden || !auto.enabled || auto.busy) return;
+    if (auto.timer) {
+      clearTimeout(auto.timer);
+      auto.timer = null;
+    }
+    autoMacTick();
   }
   function submit() {
     if (elements.submit.disabled) return;
     showError(null);
+    manualSeq++;
     elements.submit.disabled = true;
     elements.submit.innerHTML = "Entrando…";
     var mac = DeviceIdentity.getDeviceMac();
@@ -164,23 +283,33 @@
     if (!state.username.trim() || !state.password.trim()) {
       p = mac ? PanelApi.panelLoginByMac(state.code, mac).then(function (result) {
         return finishResellerLogin(state.code, result.customer && result.customer.username || "", "", result, mac);
-      }) : Promise.reject(new PanelApi.PanelError("invalid_credentials", "Preencha usuário e senha."));
+      }) : Promise.reject(new PanelApi.PanelError("missing_credentials", "Preencha usuário e senha."));
     } else {
       p = PanelApi.panelLogin(state.code, state.username, state.password).then(function (result) {
         return finishResellerLogin(state.code, state.username, state.password, result, null);
       });
     }
     p.then(function () {
+      auto.enabled = false;
       global.App.onLoggedIn();
     }).catch(function (e) {
       var code = e && e.code || e && e.message || "unknown_error";
-      showError(PanelApi.friendlyLoginError(code));
+      // Aviso pro painel no próximo heartbeat (ver js/data/appReport.js).
+      AppReport.recordLoginFailure(code);
+      showLoginError(e);
     }).finally(function () {
       elements.submit.disabled = false;
       elements.submit.innerHTML = Icon("play") + "<span>Entrar</span>" + Icon("forward");
     });
   }
   function mount() {
+    visit++;
+    auto = {
+      enabled: false,
+      timer: null,
+      busy: false,
+      lastFailKind: null
+    };
     render();
     BackNav.bind(BackNav.exitApp);
     elements.mac.textContent = DeviceIdentity.getDeviceMac();
@@ -188,23 +317,33 @@
     var mac = DeviceIdentity.getDeviceMac();
     var skip = _skipAutoMacOnce;
     _skipAutoMacOnce = false;
+    var screenEl = document.querySelector('.screen[data-screen="login"]');
     if (mac && !skip) {
+      auto.enabled = true;
+      document.addEventListener("visibilitychange", onVisibilityChange);
       elements.checking.style.display = "block";
       elements.formWrap.style.display = "none";
-      tryMacLogin(mac).then(function (ok) {
-        if (ok) {
-          global.App.onLoggedIn();
-          return;
-        }
+      var myVisit = visit;
+      runMacLogin(mac).then(function (ok) {
+        if (ok || myVisit !== visit) return;
         elements.checking.style.display = "none";
         elements.formWrap.style.display = "block";
-        SN.focusFirst(document.querySelector('.screen[data-screen="login"]'));
+        SN.focusFirst(screenEl);
+        scheduleAutoMac();
       });
     } else {
-      SN.focusFirst(document.querySelector('.screen[data-screen="login"]'));
+      SN.focusFirst(screenEl);
     }
   }
-  function unmount() {}
+  function unmount() {
+    visit++;
+    auto.enabled = false;
+    if (auto.timer) {
+      clearTimeout(auto.timer);
+      auto.timer = null;
+    }
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  }
   global.LoginScreen = {
     skipAutoMacOnce: function skipAutoMacOnce() {
       _skipAutoMacOnce = true;

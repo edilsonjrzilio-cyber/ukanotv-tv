@@ -184,8 +184,13 @@
       });
     });
   }
+
+  // Muda a cada mount/unmount: o catálogo que chega depois de a pessoa sair
+  // da tela não desenha nem puxa o foco pra cá.
+  var visit = 0;
   function mount(params) {
     back = params && params.back || null;
+    var myVisit = ++visit;
     var creds = SessionStore.loadCreds();
     var root = document.querySelector('.screen[data-screen="seriesDetail"] .screen-content');
     root.innerHTML = '<div style="padding:60px;color:var(--accent);">Carregando…</div>';
@@ -196,16 +201,36 @@
       show: null,
       plot: null
     };
+    // Voltar já vale no carregamento e no aviso de erro (antes só depois
+    // de a série aparecer).
+    BackNav.bind(goBack);
     if (!creds) return;
+
+    // Série (cabeçalho) ou episódios que não carregaram: aviso com tentar
+    // de novo/voltar no lugar do "Carregando…" eterno. Uma vez por visita.
+    var failed = false;
+    function onCatalogError() {
+      if (myVisit !== visit || failed) return;
+      failed = true;
+      // Aviso pro painel no próximo heartbeat (ver js/data/appReport.js).
+      if (global.AppReport) AppReport.recordError("catalog_failed");
+      ContentGrid.showLoadError(root, "Não foi possível carregar esta série.", function () {
+        mount(params);
+      }, goBack);
+    }
+    function stale() {
+      return myVisit !== visit || failed;
+    }
     XtreamApi.getSeries(creds).then(function (list) {
+      if (stale()) return;
       state.show = list.find(function (s) {
         return s.seriesId === params.id;
       }) || null;
       render(creds);
       if (!focusReturnedEpisode(params)) SN.focusFirst(document.querySelector('.screen[data-screen="seriesDetail"]'));
-      BackNav.bind(goBack);
-    });
+    }).catch(onCatalogError);
     XtreamApi.loadSeriesDetail(creds, params.id).then(function (detail) {
+      if (stale()) return;
       state.episodes = detail.episodes;
       state.groups = groupEpisodes(detail.episodes);
       state.plot = detail.plot;
@@ -262,7 +287,7 @@
       }
       renderEpisodes(creds);
       focusReturnedEpisode(params);
-    });
+    }).catch(onCatalogError);
   }
 
   // Voltando do player: foco no episódio que estava tocando (antes ia pra
@@ -276,6 +301,8 @@
   }
   Router.register("seriesDetail", {
     mount: mount,
-    unmount: function unmount() {}
+    unmount: function unmount() {
+      visit++;
+    }
   });
 })(window);

@@ -332,7 +332,9 @@
   // revendedor/cliente pra checar contra. Melhor esforço: falha de rede
   // nunca desloga ninguém (PanelApi.deviceHeartbeat já devolve null nesse
   // caso).
-  function checkHeartbeat() {
+  // skipRefresh: só o heartbeat, sem reconsultar a validade (aviso avulso,
+  // ver heartbeatNow).
+  function checkHeartbeat(skipRefresh) {
     if (blockPending) return;
     var creds = SessionStore.loadCreds();
     if (!creds || !creds.deviceId || !creds.customerId || !creds.resellerSlug) return;
@@ -343,8 +345,15 @@
         onSessionBlocked(errorCode, creds);
         return;
       }
-      refreshCustomerExpiry(creds);
+      if (skipRefresh !== true) refreshCustomerExpiry(creds);
     });
+  }
+
+  // 1ª vez que algo toca neste aparelho (AppReport.markWatched, ver
+  // player.js): avisa o painel já, sem esperar o heartbeat de 20 min ("Já
+  // assistiu" na tela Clientes). Sem sessão de revendedor, não faz nada.
+  function heartbeatNow() {
+    checkHeartbeat(true);
   }
   function onSessionBlocked(errorCode, creds) {
     if (blockPending || !sameSession(SessionStore.loadCreds(), creds)) return;
@@ -366,6 +375,10 @@
 
   // Ninguém continua assistindo atrás do aviso de bloqueio.
   function stopAllVideo() {
+    // Player aberto: desmonta a reprodução (vídeo + tentativas de
+    // reconexão). Na Samsung a tela cheia é o AVPlay, que não é um <video>:
+    // o laço abaixo não achava ele e o filme seguia tocando atrás do aviso.
+    if (global.PlayerScreen) PlayerScreen.stop();
     var videos = document.querySelectorAll("video");
     for (var i = 0; i < videos.length; i++) {
       try {
@@ -374,6 +387,8 @@
         videos[i].load();
       } catch (e) {}
     }
+    // E o AVPlay direto, caso tenha ficado aberto por fora do player.
+    if (global.Platform && Platform.stopVideo) Platform.stopVideo();
   }
 
   // Mesma sessão (ninguém saiu nem trocou de lista enquanto o painel
@@ -593,7 +608,8 @@
     play: play,
     finishLogin: finishLogin,
     switchToOtherReseller: switchToOtherReseller,
-    checkListChoice: checkListChoice
+    checkListChoice: checkListChoice,
+    heartbeatNow: heartbeatNow
   };
 
   // A cada troca de tela: um diálogo que ficou aberto por trás fecha sem
