@@ -56,28 +56,41 @@
       var dx = cx - fromCx;
       var dy = cy - fromCy;
       var primary, perpendicular;
+
+      // Um "em cima" do outro no eixo cruzado (as faixas se cruzam) conta
+      // como alinhado, mesmo com os centros longe: uma barra larga logo
+      // abaixo de um botão pequeno (Ajustes: Voltar -> Suas Listas) era
+      // pulada (bug de 18/11 na LG). Sem cruzar, vale a distância entre os
+      // centros, como sempre. O centro desempata entre os alinhados.
+      var overX = r.left < fromRect.right && fromRect.left < r.right;
+      var overY = r.top < fromRect.bottom && fromRect.top < r.bottom;
+      var tie;
       if (direction === "right") {
         if (dx <= 1) return;
         primary = dx;
-        perpendicular = Math.abs(dy);
+        tie = Math.abs(dy);
+        perpendicular = overY ? 0 : tie;
       } else if (direction === "left") {
         if (dx >= -1) return;
         primary = -dx;
-        perpendicular = Math.abs(dy);
+        tie = Math.abs(dy);
+        perpendicular = overY ? 0 : tie;
       } else if (direction === "down") {
         if (dy <= 1) return;
         primary = dy;
-        perpendicular = Math.abs(dx);
+        tie = Math.abs(dx);
+        perpendicular = overX ? 0 : tie;
       } else if (direction === "up") {
         if (dy >= -1) return;
         primary = -dy;
-        perpendicular = Math.abs(dx);
+        tie = Math.abs(dx);
+        perpendicular = overX ? 0 : tie;
       } else return;
 
       // Desalinhamento pesa mais que distância pura -- sem isso, uma
       // fileira vizinha bem mais perto (mas desalinhada) ganhava de um
       // item na mesma fileira/coluna lógica, movimento parecia "errado".
-      var score = primary + perpendicular * 2.5;
+      var score = primary + perpendicular * 2.5 + tie * 0.02;
       if (score < bestScore) {
         bestScore = score;
         best = el;
