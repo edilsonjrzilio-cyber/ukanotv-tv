@@ -13,6 +13,13 @@
   // que não alcançava o endereço do ukanotv.com ("No route to host"), com
   // MAC e lista certos. Ver panelFetch.
   var PANEL_FALLBACK_URL = "https://ukanolink.com";
+  // 3º caminho (18/11), fora da Cloudflare: o painel e o ukanolink.com estão
+  // os dois na Cloudflare, então uma rede que barre a Cloudflare derruba os
+  // dois juntos. Este repassa /api/public/* pro painel pela Vercel (projeto
+  // ukanotv-ponte, infra/ponte-vercel/vercel.json), com os mesmos caminhos.
+  var PANEL_FALLBACK2_URL = "https://ukanotv-ponte.vercel.app";
+  // Ordem fixa das tentativas (o que funcionou por último vai na frente).
+  var PANEL_BASES = [PANEL_URL, PANEL_FALLBACK_URL, PANEL_FALLBACK2_URL];
   var REQUEST_TIMEOUT_MS = 35000;
   function normalizePanel(url) {
     var s = (url || "").trim();
@@ -45,13 +52,13 @@
 
   // ===== Caminho reserva (porta de data/PanelFailover.kt do Android) =====
   // Quando a CONEXÃO com um endereço falha (sem rota, DNS, recusada, tempo
-  // esgotado), o mesmo pedido vai pelo outro. Resposta do painel vale e não
-  // troca (403/404/503 incluídos) -- só 5xx vindo do reserva tenta o direto
+  // esgotado), o mesmo pedido vai pelo próximo da lista. Resposta do painel vale e não
+  // troca (403/404/503 incluídos) -- só 5xx vindo de um reserva tenta os outros
   // também (pode ser o repasse falhando). O que funcionou fica guardado, com
   // a data, e vai primeiro nas próximas chamadas: não paga a espera do
   // caminho ruim a cada vez.
   var PANEL_HOST_KEY = "panel_host_v1";
-  // 1ª tentativa com prazo de 20 s no total; sem resposta, vai pro outro.
+  // Cada tentativa que não é a última tem prazo de 20 s; sem resposta, vai pra próxima.
   // O login pelo painel leva 3,4-7 s (medido em 17/11) e mais numa TV com
   // rede lenta: com 8 s (antes) a TV desistia do direto à toa e passava a
   // usar o reserva (Cloudflare, com teto diário). Erro de rede imediato
@@ -64,7 +71,7 @@
   function loadPreferredHost() {
     try {
       var saved = JSON.parse(localStorage.getItem(PANEL_HOST_KEY) || "null");
-      if (saved && (saved.base === PANEL_URL || saved.base === PANEL_FALLBACK_URL)) return saved;
+      if (saved && PANEL_BASES.indexOf(saved.base) >= 0) return saved;
     } catch (e) {}
     return {
       base: PANEL_URL,
@@ -80,7 +87,9 @@
   function hostOrder() {
     var saved = loadPreferredHost();
     var first = reserveExpired(saved) ? PANEL_URL : saved.base;
-    return [first, first === PANEL_URL ? PANEL_FALLBACK_URL : PANEL_URL];
+    return [first].concat(PANEL_BASES.filter(function (b) {
+      return b !== first;
+    }));
   }
 
   // Grava quem respondeu se mudou o preferido, ou se era a reconferência
@@ -141,8 +150,8 @@
       var last = i === order.length - 1;
       return fetchWithTimeout(base + path, init, last ? limit : Math.min(FIRST_TRY_TIMEOUT_MS, limit)).then(function (res) {
         if (res.status >= 500 && base !== PANEL_URL && !last) {
-          // O direto também não responder: fica valendo esta resposta.
-          reserveAnswer = res;
+          // Os outros também não responderem: fica valendo esta resposta.
+          if (!reserveAnswer) reserveAnswer = res;
           return tryAt(i + 1);
         }
         rememberHost(base);
