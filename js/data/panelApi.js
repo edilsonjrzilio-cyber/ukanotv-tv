@@ -172,9 +172,13 @@
     if (allowRetry === undefined) allowRetry = true;
     var bodyJson = JSON.stringify(bodyObj);
     function attempt(contentType) {
+      // Só cabeçalhos que todo endereço do painel libera (CORS). O
+      // "Cache-Control: no-cache" que ia aqui só era liberado no login: na
+      // página do Media Station X (origem http) a TV barrava a troca de lista
+      // e o registro do aparelho ("não conseguiu alcançar o painel" e "nunca
+      // entrou", caso real de 18/11 na LG). POST já não usa cache.
       var headers = {
-        Accept: "application/json, text/plain, */*",
-        "Cache-Control": "no-cache"
+        Accept: "application/json, text/plain, */*"
       };
       if (contentType) headers["Content-Type"] = contentType;
       return panelFetch(path, {
