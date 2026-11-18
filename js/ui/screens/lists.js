@@ -253,12 +253,16 @@
   function refreshResellerServers() {
     var c = SessionStore.loadCreds();
     if (!c || !c.resellerSlug) return Promise.resolve();
-    var p = c.loginMac ? PanelApi.panelLoginByMac(c.resellerSlug, c.loginMac) : function () {
-      var username = c.panelUsername || c.username,
-        password = c.panelPassword || c.password;
-      if (!username || !password) return Promise.resolve(null);
-      return PanelApi.panelLogin(c.resellerSlug, username, password);
-    }();
+    // Com senha do PAINEL guardada (entrou com código + usuário + senha),
+    // reconfere com ela. Sem ela, é sessão do MAC: reconfere pelo MAC de login
+    // ou, em sessão de versão antiga que ainda não guardava o loginMac, pelo
+    // MAC deste aparelho (o mesmo que entrou). Antes caía na senha do
+    // SERVIDOR (c.password, a do link), o painel recusava e as listas novas
+    // nunca apareciam (caso real de 18/11, LG pelo Media Station X).
+    var username = c.panelUsername || c.username;
+    var panelPassword = String(c.panelPassword || "").trim();
+    var mac = String(c.loginMac || "").trim() || (panelPassword ? "" : String(DeviceIdentity.getDeviceMac() || "").trim());
+    var p = panelPassword && username && !c.loginMac ? PanelApi.panelLogin(c.resellerSlug, username, panelPassword) : mac ? PanelApi.panelLoginByMac(c.resellerSlug, mac) : Promise.resolve(null);
     return p.then(function (result) {
       if (!result) return;
       var latest = SessionStore.loadCreds();
@@ -528,4 +532,9 @@
       ContentHeaderBar.unbind();
     }
   });
+  // O app chama ao abrir (app.js): servidor novo cadastrado no painel depois
+  // do login aparece em Ajustes e Suas Listas sem precisar abrir esta tela.
+  global.ListsScreen = {
+    refreshServers: refreshResellerServers
+  };
 })(window);

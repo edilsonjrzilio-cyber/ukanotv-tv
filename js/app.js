@@ -67,6 +67,12 @@
       if (blockPending) return;
       Router.go("home");
       startHeartbeatLoop();
+      // Listas novas do painel (cadastradas depois do login) entram na sessão
+      // sem precisar abrir Suas Listas, igual o Android e a Roku ao abrir.
+      // Melhor esforço, em segundo plano, depois do catálogo.
+      if (global.ListsScreen) setTimeout(function () {
+        global.ListsScreen.refreshServers();
+      }, 4000);
     });
   }
 
