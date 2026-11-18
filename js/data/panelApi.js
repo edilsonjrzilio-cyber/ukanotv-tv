@@ -316,11 +316,16 @@
   // Usuário/senha do painel e MAC pra trocar de servidor (switchServer).
   // Quem entrou pelo MAC vai pelo MAC, com a senha vazia: antes ia a senha
   // da lista Xtream no lugar da do painel, e ele recusava.
+  // Sessão do MAC de versão antiga (sem loginMac e sem senha do painel) vai
+  // pelo MAC deste aparelho: antes ia a senha do SERVIDOR e o painel recusava
+  // a troca de lista (caso real de 18/11, LG pelo Media Station X).
   function serverSwitchAuth(creds) {
+    var panelPassword = String(creds.panelPassword || "").trim();
+    var mac = creds.loginMac || (!panelPassword && global.DeviceIdentity ? String(DeviceIdentity.getDeviceMac() || "").trim() : "") || null;
     return {
       username: creds.panelUsername || creds.username || "",
-      password: creds.loginMac ? creds.panelPassword || "" : creds.panelPassword || creds.password || "",
-      mac: creds.loginMac || null
+      password: mac ? panelPassword : panelPassword || creds.password || "",
+      mac: mac
     };
   }
 

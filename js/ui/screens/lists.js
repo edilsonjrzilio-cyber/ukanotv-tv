@@ -267,6 +267,10 @@
       if (!result) return;
       var latest = SessionStore.loadCreds();
       if (!sameSession(latest, c)) return;
+      var mudouConexao = false;
+      // Sessão do MAC de versão antiga confirmada pelo MAC: guarda o loginMac,
+      // pra troca de lista e as próximas conferências irem pelo MAC.
+      if (!latest.loginMac && mac && !panelPassword) latest.loginMac = mac;
       // Listas deste aparelho em outros revendedores (campo ausente = painel
       // antigo, mantém o que tinha).
       latest.otherResellers = PanelApi.otherResellersFrom(result, latest.otherResellers || null);
@@ -278,14 +282,30 @@
         var keep = latest.currentServerId && result.servers.some(function (s) {
           return s.id === latest.currentServerId;
         });
-        if (!keep) latest.currentServerId = result.current_server_id || latest.currentServerId;
-        // A lista de DNS do painel é a do servidor PADRÃO; com outro servidor
-        // escolhido à mão, mantém a que já tinha.
-        if (!keep || latest.currentServerId === result.current_server_id) {
-          latest.alternateUrls = PanelApi.dnsListFor(latest, result.m3u_url, result.alternate_urls);
+        if (!keep && result.m3u_url && result.current_server_id) {
+          // O servidor em uso não está mais na lista do painel (foi tirado,
+          // ou a sessão é de antes dela): passa pro PADRÃO de verdade, com a
+          // conexão dele. Antes só punha a ★ no padrão e seguia na conexão
+          // antiga, e tocar nele em Suas Listas não fazia nada, porque já
+          // constava como o atual (caso real de 18/11, LG pelo Media Station X).
+          var noPadrao = PanelApi.credsOnServer(latest, result.current_server_id, result);
+          mudouConexao = noPadrao.url !== latest.url || noPadrao.username !== latest.username || noPadrao.password !== latest.password || noPadrao.m3uUrl !== latest.m3uUrl;
+          latest = noPadrao;
+        } else {
+          if (!keep) latest.currentServerId = result.current_server_id || latest.currentServerId;
+          // A lista de DNS do painel é a do servidor PADRÃO; com outro servidor
+          // escolhido à mão, mantém a que já tinha.
+          if (!keep || latest.currentServerId === result.current_server_id) {
+            latest.alternateUrls = PanelApi.dnsListFor(latest, result.m3u_url, result.alternate_urls);
+          }
         }
       }
       SessionStore.saveCreds(latest);
+      // Conexão nova: recarrega o catálogo dela (igual trocar em Suas Listas).
+      if (mudouConexao && global.App) {
+        ContinueWatching.clearAll();
+        global.App.onLoggedIn();
+      }
     }).catch(function () {});
   }
   function reportCustomList(entry) {
