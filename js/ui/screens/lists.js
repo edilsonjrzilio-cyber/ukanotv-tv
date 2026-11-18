@@ -267,6 +267,16 @@
       if (!result) return;
       var latest = SessionStore.loadCreds();
       if (!sameSession(latest, c)) return;
+      // Sessão do MAC e o painel respondeu OUTRO cliente: o MAC foi passado
+      // pra outro cadastro (ou a sessão é de antes de guardar o cliente).
+      // Refaz a sessão nesse cadastro, igual entrar de novo pelo MAC (registra
+      // o aparelho lá). Antes a TV seguia no cadastro antigo: o novo aparecia
+      // como "nunca entrou" e o padrão trocado no painel não chegava (caso
+      // real de 18/11, LG pelo Media Station X).
+      var outroCliente = result.customer && result.customer.id && result.customer.id !== latest.customerId;
+      if (outroCliente && !panelPassword && global.App && global.App.switchToOtherReseller) {
+        return global.App.switchToOtherReseller(latest.resellerSlug, null).catch(function () {});
+      }
       var mudouConexao = false;
       // Sessão do MAC de versão antiga confirmada pelo MAC: guarda o loginMac,
       // pra troca de lista e as próximas conferências irem pelo MAC.

@@ -408,7 +408,11 @@
   // sessão com expires_at vazio/desatualizado no login nunca é atualizada
   // de novo depois (ex.: cliente renovou no painel).
   function refreshCustomerExpiry(creds) {
-    var p = creds.loginMac ? PanelApi.panelLoginByMac(creds.resellerSlug, creds.loginMac) : PanelApi.panelLogin(creds.resellerSlug, creds.panelUsername || creds.username, creds.panelPassword || creds.password);
+    // Sem senha do painel é sessão do MAC (de versão antiga, sem loginMac):
+    // confere pelo MAC deste aparelho. A senha do SERVIDOR o painel recusa.
+    var panelPassword = String(creds.panelPassword || "").trim();
+    var mac = creds.loginMac || (!panelPassword ? String(DeviceIdentity.getDeviceMac() || "").trim() : "");
+    var p = mac ? PanelApi.panelLoginByMac(creds.resellerSlug, mac) : PanelApi.panelLogin(creds.resellerSlug, creds.panelUsername || creds.username, panelPassword || creds.password);
     p.then(function (result) {
       var latest = SessionStore.loadCreds();
       if (!sameSession(latest, creds)) return;
