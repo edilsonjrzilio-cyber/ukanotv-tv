@@ -456,13 +456,13 @@
       // pra TV. colW do grid (ver renderGrid()) é calculado a partir da
       // largura real que sobra, então aumentar aqui não precisa de
       // nenhum ajuste manual na grade -- ela se adapta sozinha.
-      '    <div id="cg-categories" style="width:300px;background:rgba(11,11,16,0.9);overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:8px;" data-sn-scroll></div>' + '    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' + '      <div class="screen-header"><div class="title" id="cg-count" style="letter-spacing:2.5px;"></div><div class="hint">Segure OK ou aperte o botão amarelo pra favoritar</div></div>' +
+      '    <div id="cg-categories" style="width:300px;background:rgba(11,11,16,0.9);overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:8px;" data-sn-scroll data-sn-enter=".cg-cat.active"></div>' + '    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' + '      <div class="screen-header"><div class="title" id="cg-count" style="letter-spacing:2.5px;"></div><div class="hint">Segure OK ou aperte o botão amarelo pra favoritar</div></div>' +
       // 8 colunas fixas (COLS no topo do arquivo) -- pedido explícito: no
       // máximo 8 por linha, cartão bem maior, espaço de verdade pro
       // texto. position:relative (não display:grid) -- a grade
       // virtualizada posiciona cada card com position:absolute calculado
       // à mão (ver createCard()/syncWindow() abaixo), não CSS Grid.
-      '      <div id="cg-grid" style="flex:1;overflow-y:auto;position:relative;" data-sn-scroll></div>' + "    </div>" + "  </div>" + "</div>";
+      '      <div id="cg-grid" style="flex:1;overflow-y:auto;position:relative;" data-sn-scroll data-sn-up=".ch-search"></div>' + "    </div>" + "  </div>" + "</div>";
       ensureCardStyles();
 
       // Cacheia TUDO escopado dentro de `root` (não document.querySelector

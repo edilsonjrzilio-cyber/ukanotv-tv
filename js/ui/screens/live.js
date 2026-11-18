@@ -188,11 +188,11 @@
     // espaço numa tela grande (isso é que deixava "enorme"). Categoria
     // e canais continuam sempre mostrando o nome inteiro (quebra linha
     // em vez de cortar com "...").
-    '    <div id="live-categories" style="width:330px;background:rgba(11,11,16,0.9);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px;" data-sn-scroll></div>' +
+    '    <div id="live-categories" style="width:330px;background:rgba(11,11,16,0.9);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px;" data-sn-scroll data-sn-enter=".live-cat.active"></div>' +
     // Lista virtualizada (ver syncListWindow): só as linhas perto da área
     // visível existem no DOM, posicionadas por cima de um "miolo" com a
     // altura da lista inteira.
-    '    <div id="live-list" style="flex:1;min-width:0;overflow-y:auto;position:relative;" data-sn-scroll><div id="live-list-inner" style="position:relative;"></div></div>' + '    <div id="live-preview" style="width:320px;flex-shrink:0;padding:16px;overflow-y:auto;" data-sn-scroll></div>' + "  </div>" + "</div>";
+    '    <div id="live-list" style="flex:1;min-width:0;overflow-y:auto;position:relative;" data-sn-scroll data-sn-up=".ch-search"><div id="live-list-inner" style="position:relative;"></div></div>' + '    <div id="live-preview" style="width:320px;flex-shrink:0;padding:16px;overflow-y:auto;" data-sn-scroll></div>' + "  </div>" + "</div>";
     ensureStyles();
     ContentHeaderBar.bind(root, function () {
       Router.go("home");

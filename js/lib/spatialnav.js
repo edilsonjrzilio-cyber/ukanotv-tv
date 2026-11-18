@@ -143,6 +143,32 @@
       return true;
     }
     var next = bestCandidate(from, direction, root);
+    // data-sn-up="<seletor>" numa lista/grade: Cima na 1ª fileira (lista no
+    // topo, sem mais nada acima dentro dela) vai pro alvo da mesma tela --
+    // a busca do cabeçalho. Antes o mais "perto" era uma categoria ao lado.
+    if (direction === "up") {
+      var box = from.closest("[data-sn-up]");
+      if (box && box.scrollTop < 5 && (!next || !box.contains(next))) {
+        var upTarget = (from.closest(".screen") || document).querySelector(box.getAttribute("data-sn-up"));
+        if (upTarget && visible(upTarget)) next = upTarget;
+      }
+    }
+    // Baixo no último item dessa lista/grade fica onde está: antes pulava
+    // pra coluna de categorias ao lado.
+    if (direction === "down" && next) {
+      var downBox = from.closest("[data-sn-up]");
+      if (downBox && !downBox.contains(next)) next = null;
+    }
+    // data-sn-enter="<seletor>" numa coluna: entrar nela pelo lado cai no
+    // item marcado (a categoria selecionada), não no que estiver na altura
+    // de onde a pessoa veio.
+    if (next && (direction === "left" || direction === "right")) {
+      var into = next.closest("[data-sn-enter]");
+      if (into && !into.contains(from)) {
+        var preferred = into.querySelector(into.getAttribute("data-sn-enter"));
+        if (preferred && !preferred.hasAttribute("disabled")) next = preferred;
+      }
+    }
     if (next) setFocus(next);
     return !!next;
   }
