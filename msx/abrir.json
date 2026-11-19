@@ -2,7 +2,7 @@
     "type": "list",
     "cache": false,
     "headline": "UKANOTV",
-    "action": "delay:abrir:3:link:replace:http://ukanotv.sbs/?v=mwmnpb5p",
+    "action": "delay:abrir:3:link:replace:http://ukanotv.sbs/?v=mwmtb8k4",
     "template": {
         "type": "separate",
         "layout": "0,0,12,1",
@@ -13,7 +13,7 @@
             "title": "Abrir o UKANOTV",
             "titleFooter": "Abre sozinho em 3 segundos.",
             "icon": "msx-white-soft:play-arrow",
-            "action": "link:replace:http://ukanotv.sbs/?v=mwmnpb5p"
+            "action": "link:replace:http://ukanotv.sbs/?v=mwmtb8k4"
         },
         {
             "title": "Ficar no Media Station X",

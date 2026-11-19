@@ -17,6 +17,21 @@
   "use strict";
 
   var base = global.Platform || {};
+
+  // O app é desenhado em 1920x1080. No MSX há TV que abre a página numa
+  // janela menor (1280x720 ou 960x540) e ignora o <meta viewport>: aparecia
+  // só o canto de cima da Início, "ampliado" (foto de cliente, 18/11).
+  // Encolhe (ou estica) a página inteira pra caber na janela.
+  function fitScreen() {
+    var w = global.innerWidth || 0,
+      h = global.innerHeight || 0;
+    if (!w || !h) return;
+    var k = Math.min(w / 1920, h / 1080);
+    document.documentElement.style.zoom = Math.abs(k - 1) < 0.02 ? "" : String(k);
+  }
+  fitScreen();
+  global.addEventListener("resize", fitScreen);
+  global.addEventListener("load", fitScreen);
   var isSamsung = !!(global.tizen || global.webapis && global.webapis.avplay);
   var isLg = !isSamsung && !!global.PalmSystem;
 
