@@ -419,14 +419,21 @@
       return Promise.resolve(playlistCache.items);
     }
     if (inflight && inflight.key === cacheKey) return inflight.promise;
-    var promise = fetch(targetUrl, {
+
+    // Mesmo teto de 4 min do catálogo Xtream (XtreamApi.fetchTextCapped): lista
+    // que chega aos poucos não prende a tela pra sempre.
+    var cap = global.XtreamApi && XtreamApi.fetchTextCapped;
+    var promise = (cap ? cap(targetUrl, "audio/x-mpegurl, text/plain, */*", XtreamApi.REQUEST_CAP_MS).catch(function (e) {
+      var m = /failed: (\d+)/.exec(e && e.message || "");
+      throw new Error(m ? "Falha ao carregar a lista (HTTP " + m[1] + ")." : e && e.message === "timeout" ? "A lista demorou demais para chegar." : e && e.message || "Falha ao carregar a lista.");
+    }) : fetch(targetUrl, {
       headers: {
         Accept: "audio/x-mpegurl, text/plain, */*"
       }
     }).then(function (res) {
       if (!res.ok) throw new Error("Falha ao carregar a lista (HTTP " + res.status + ").");
       return res.text();
-    }).then(function (text) {
+    })).then(function (text) {
       var items = parseM3U(text);
       if (!items.length) throw new Error("Nenhum conteúdo encontrado na lista.");
       playlistCache = {

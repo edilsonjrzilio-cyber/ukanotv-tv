@@ -24,15 +24,45 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
   function apiBase(creds) {
     return normalizeUrl(creds.url) + "/player_api.php?username=" + encodeSeg(creds.username) + "&password=" + encodeSeg(creds.password);
   }
-  function getJson(url) {
-    return fetch(url, {
+
+  // Teto do pedido inteiro (19/11): sem ele, servidor que manda o catálogo aos
+  // poucos deixava o pedido aberto pra sempre e Ao vivo/Filmes/Séries ficavam
+  // em "carregando" até fechar o app (clientes presos ~20 min). Passou do teto
+  // = erro: a tela mostra a falha e a próxima abertura tenta de novo. Mesmo
+  // teto do Android (callTimeout de 4 min).
+  var REQUEST_CAP_MS = 4 * 60 * 1000;
+  function fetchTextCapped(url, accept, capMs) {
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    var timer;
+    var cap = new Promise(function (resolve, reject) {
+      timer = setTimeout(function () {
+        if (ctrl) {
+          try {
+            ctrl.abort();
+          } catch (e) {}
+        }
+        reject(new Error("timeout"));
+      }, capMs);
+    });
+    var request = fetch(url, {
       headers: {
-        Accept: "application/json, text/plain, */*"
-      }
+        Accept: accept
+      },
+      signal: ctrl ? ctrl.signal : undefined
     }).then(function (res) {
       if (!res.ok) throw new Error("Xtream request failed: " + res.status);
       return res.text();
     });
+    return Promise.race([request, cap]).then(function (text) {
+      clearTimeout(timer);
+      return text;
+    }, function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
+  }
+  function getJson(url) {
+    return fetchTextCapped(url, "application/json, text/plain, */*", REQUEST_CAP_MS);
   }
 
   // Conferência de DNS antes de baixar o catálogo (ver App.ensureWorkingServer):
@@ -721,6 +751,8 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     sanitizeCover: sanitizeCover,
     xtreamAuthCheck: xtreamAuthCheck,
     isServerHealthy: isServerHealthy,
+    fetchTextCapped: fetchTextCapped,
+    REQUEST_CAP_MS: REQUEST_CAP_MS,
     getLiveStreams: getLiveStreams,
     getVod: getVod,
     getSeries: getSeries,
