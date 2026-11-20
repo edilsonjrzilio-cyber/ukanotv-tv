@@ -72,15 +72,15 @@ button, input { font-family: inherit; }
   width: 64px; height: 64px; border-radius: 18px;
   background: linear-gradient(135deg, var(--accent), var(--accent-soft));
   display: flex; align-items: center; justify-content: center;
-  color: #000; font-size: 26px; font-weight: 900;
+  color: #000; font-size: 31px; font-weight: 900;
 }
-.boot-title { color: var(--accent); font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 14px; }
+.boot-title { color: var(--accent); font-size: 26.5px; font-weight: 900; letter-spacing: 2px; margin-top: 14px; }
 .boot-spinner {
   width: 32px; height: 32px; margin-top: 26px; border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.15); border-top-color: var(--accent);
   animation: boot-spin 800ms linear infinite;
 }
-.boot-text { color: var(--subtext); font-size: 13px; font-weight: 700; margin-top: 14px; }
+.boot-text { color: var(--subtext); font-size: 17.5px; font-weight: 700; margin-top: 14px; }
 @keyframes boot-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* Aviso rápido por cima de qualquer tela, até do #boot-loading (ex.: troca
@@ -91,7 +91,7 @@ button, input { font-family: inherit; }
   max-width: 720px; transform: translateX(-50%);
   background: rgba(17, 24, 39, 0.9); color: #fff;
   border-radius: 12px; padding: 12px 20px;
-  font-size: 15px; font-weight: 700; line-height: 22px; text-align: center;
+  font-size: 20px; font-weight: 700; line-height: 26.5px; text-align: center;
   pointer-events: none; opacity: 0; transition: opacity 200ms ease;
 }
 #app-notice.visible { opacity: 1; }
@@ -115,10 +115,10 @@ button, input { font-family: inherit; }
   padding: 10px 32px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .screen-header .title {
-  color: #fff; font-size: 24px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase;
+  color: #fff; font-size: 29px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase;
 }
 .screen-header .right { display: flex; align-items: center; gap: 16px; }
-.screen-header .hint { color: var(--accent-soft); font-size: 18px; font-weight: 700; }
+.screen-header .hint { color: var(--accent-soft); font-size: 24px; font-weight: 700; }
 
 /* Foco (TvFocus.kt / border de 3px no accent) -- toda superfície focável
    usa essa mesma convenção: 1px sutil parado, 3px na cor do accent focado.

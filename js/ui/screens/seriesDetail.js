@@ -49,12 +49,12 @@
     var show = state.show;
     var favs = SessionStore.getFavorites().series || [];
     var isFav = show && favs.indexOf(show.seriesId) >= 0;
-    root.innerHTML = '<div style="height:100%;background:#050506;overflow-y:auto;" data-sn-scroll>' + '  <button class="focusable" id="sd-back" data-sn-autofocus style="position:fixed;top:28px;left:28px;background:rgba(255,255,255,0.08);border:none;color:#fff;font-size:20px;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:2;">' + Icon("back") + "</button>" + '  <div style="display:flex;gap:18px;padding:24px 24px 24px 90px;">' + '    <div style="width:110px;height:160px;border-radius:12px;overflow:hidden;background:#111827;flex-shrink:0;">' + (show && show.cover ? '<img src="' + show.cover + '" style="width:100%;height:100%;object-fit:cover;" />' : "") + "    </div>" + '    <div style="flex:1;max-width:760px;display:flex;flex-direction:column;gap:6px;">' + '      <span style="align-self:flex-start;background:var(--accent);color:#000;font-size:10px;font-weight:900;letter-spacing:1.4px;padding:4px 10px;border-radius:20px;">SÉRIE</span>' + '      <div style="color:#fff;font-size:22px;font-weight:900;">' + (show ? show.name : "Série") + "</div>" + '      <div id="sd-counts" style="color:#CBD5E1;font-size:13px;font-weight:600;"></div>' + '      <div style="color:#9A9AA5;font-size:12px;">' + (show && show.group || "") + "</div>" +
+    root.innerHTML = '<div style="height:100%;background:#050506;overflow-y:auto;" data-sn-scroll>' + '  <button class="focusable" id="sd-back" data-sn-autofocus style="position:fixed;top:28px;left:28px;background:rgba(255,255,255,0.08);border:none;color:#fff;font-size:26.5px;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:2;">' + Icon("back") + "</button>" + '  <div style="display:flex;gap:18px;padding:24px 24px 24px 90px;">' + '    <div style="width:110px;height:160px;border-radius:12px;overflow:hidden;background:#111827;flex-shrink:0;">' + (show && show.cover ? '<img src="' + show.cover + '" style="width:100%;height:100%;object-fit:cover;" />' : "") + "    </div>" + '    <div style="flex:1;max-width:760px;display:flex;flex-direction:column;gap:6px;">' + '      <span style="align-self:flex-start;background:var(--accent);color:#000;font-size:13.5px;font-weight:900;letter-spacing:1.4px;padding:4px 10px;border-radius:20px;">SÉRIE</span>' + '      <div style="color:#fff;font-size:26.5px;font-weight:900;">' + (show ? show.name : "Série") + "</div>" + '      <div id="sd-counts" style="color:#CBD5E1;font-size:17.5px;font-weight:600;"></div>' + '      <div style="color:#9A9AA5;font-size:16px;">' + (show && show.group || "") + "</div>" +
     // 3 linhas com "..." -- igual SeriesScreen.kt/SeriesDetailScreen
     // (maxLines=3). Só mostra se já carregou (Android também só renderiza
     // quando plot?.plot existe; sem sinopse, Android simplesmente não
     // desenha a linha, não mostra "carregando" nem "indisponível" aqui).
-    '      <div id="sd-plot" style="color:#9A9AA5;font-size:13px;line-height:18px;margin-top:4px;display:' + (state.plot && state.plot.plot ? "-webkit-box" : "none") + ';-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;">' + (state.plot && state.plot.plot || "") + "</div>" + "    </div>" + '    <button class="focusable md-fav-btn" id="sd-fav" style="color:' + (isFav ? "#EF4444" : "#fff") + ';font-size:18px;">' + Icon(isFav ? "heart-filled" : "heart-outline") + "</button>" + "  </div>" + '  <div id="sd-seasons" style="display:flex;gap:8px;padding:0 24px;"></div>' + '  <div id="sd-episodes" style="display:flex;flex-direction:column;gap:8px;padding:14px 24px 40px;"></div>' + "</div>";
+    '      <div id="sd-plot" style="color:#9A9AA5;font-size:17.5px;line-height:24px;margin-top:4px;display:' + (state.plot && state.plot.plot ? "-webkit-box" : "none") + ';-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;">' + (state.plot && state.plot.plot || "") + "</div>" + "    </div>" + '    <button class="focusable md-fav-btn" id="sd-fav" style="color:' + (isFav ? "#EF4444" : "#fff") + ';font-size:24px;">' + Icon(isFav ? "heart-filled" : "heart-outline") + "</button>" + "  </div>" + '  <div id="sd-seasons" style="display:flex;gap:8px;padding:0 24px;"></div>' + '  <div id="sd-episodes" style="display:flex;flex-direction:column;gap:8px;padding:14px 24px 40px;"></div>' + "</div>";
     if (!document.querySelector("#sd-style")) {
       var style = document.createElement("style");
       style.id = "sd-style";
@@ -111,7 +111,7 @@
         var tab = document.createElement("button");
         tab.className = "focusable sd-season-tab" + (s === state.activeSeason ? " active" : "");
         tab.textContent = "Temporada " + s;
-        tab.style.cssText = "border-radius:20px;padding:8px 14px;font-size:12px;font-weight:700;border:2px solid transparent;cursor:pointer;" + (s === state.activeSeason ? "background:var(--accent);color:#000;" : "background:rgba(255,255,255,0.05);color:#9A9AA5;");
+        tab.style.cssText = "border-radius:20px;padding:8px 14px;font-size:16px;font-weight:700;border:2px solid transparent;cursor:pointer;" + (s === state.activeSeason ? "background:var(--accent);color:#000;" : "background:rgba(255,255,255,0.05);color:#9A9AA5;");
         tab.setAttribute("data-season", s);
         tab.addEventListener("sn:enter", function () {
           state.activeSeason = s;
@@ -149,15 +149,15 @@
     row.className = "focusable sd-episode-row";
     row.setAttribute("data-episode-id", ep.episodeId);
     row.style.cssText = "border-radius:12px;padding:12px 14px;background:rgba(255,255,255,0.03);border:3px solid transparent;cursor:pointer;display:flex;flex-direction:column;gap:8px;";
-    row.innerHTML = '<div style="display:flex;align-items:center;gap:14px;">' + '<span style="background:var(--accent);color:#000;font-size:11px;font-weight:900;padding:4px 10px;border-radius:8px;flex-shrink:0;">T' + ep.season + " · E" + String(ep.episodeNumber).padStart(2, "0") + "</span>" +
+    row.innerHTML = '<div style="display:flex;align-items:center;gap:14px;">' + '<span style="background:var(--accent);color:#000;font-size:14.5px;font-weight:900;padding:4px 10px;border-radius:8px;flex-shrink:0;">T' + ep.season + " · E" + String(ep.episodeNumber).padStart(2, "0") + "</span>" +
     // maxLines=2 + ellipsis -- igual EpisodeRow do Android, nome de
     // episódio longo não deveria empurrar a linha de tempo/botão.
-    '<span style="flex:1;color:#fff;font-size:14px;font-weight:700;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">' + ep.name + "</span>" + (
+    '<span style="flex:1;color:#fff;font-size:18.5px;font-weight:700;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">' + ep.name + "</span>" + (
     // Texto "Concluído" (não só um ícone) e cor FIXA do Ukano (não
     // var(--accent), que muda com a marca do revendedor) -- mesma
     // paridade aplicada no Roku/Android: selo de status sempre
     // reconhecível, não decorativo.
-    watched ? '<span style="background:#E11D48;color:#fff;font-size:11px;font-weight:900;padding:4px 10px;border-radius:50px;flex-shrink:0;">Concluído</span>' : "") + '<span style="color:var(--accent);font-size:18px;">' + Icon("play") + "</span>" + "</div>" + (progress > 0 ? '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.15);"><div style="height:3px;border-radius:2px;background:var(--accent);width:' + Math.min(100, progress * 100) + '%;"></div></div>' : "");
+    watched ? '<span style="background:#E11D48;color:#fff;font-size:14.5px;font-weight:900;padding:4px 10px;border-radius:50px;flex-shrink:0;">Concluído</span>' : "") + '<span style="color:var(--accent);font-size:24px;">' + Icon("play") + "</span>" + "</div>" + (progress > 0 ? '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.15);"><div style="height:3px;border-radius:2px;background:var(--accent);width:' + Math.min(100, progress * 100) + '%;"></div></div>' : "");
     return row;
   }
   function playEpisode(ep, row) {

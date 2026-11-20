@@ -113,7 +113,7 @@
     // largura fixa de 240px do painel em vez de cortar com "...",
     // desalinhando a barra inteira (bug real: "painel das categorias
     // tá muito bugado"). count com flex-shrink:0 pra nunca espremer.
-    ".cg-cat{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#F1F5F9;font-size:16px;font-weight:700;cursor:pointer;text-align:left;}" + ".cg-cat span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+    ".cg-cat{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#F1F5F9;font-size:21.5px;font-weight:700;cursor:pointer;text-align:left;}" + ".cg-cat span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
     // Contagem num tom mais apagado que o rótulo (não a mesma cor) --
     // igual CategoryRow do Android (count usa muted/#64748B inativo,
     // preto 70% ativo, nunca a MESMA cor sólida do texto principal).
@@ -140,7 +140,7 @@
     // painel lá em cima, senão a capa fica levemente fora de proporção
     // (não quebra, só distorce um pouco) em relação à largura real da
     // coluna calculada em JS (ver colW em renderGrid()).
-    ".cg-card .cover-wrap{position:relative;width:100%;height:276px;background:#1a1f2b;}" + ".cg-card .cover{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:cover;display:block;}" + ".cg-card .badge{position:absolute;top:8px;left:8px;background:var(--accent);color:#000;font-size:10px;font-weight:900;padding:3px 8px;border-radius:20px;}" +
+    ".cg-card .cover-wrap{position:relative;width:100%;height:318px;background:#1a1f2b;}" + ".cg-card .cover{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:cover;display:block;}" + ".cg-card .badge{position:absolute;top:8px;left:8px;background:var(--accent);color:#000;font-size:13.5px;font-weight:900;padding:3px 8px;border-radius:20px;}" +
     // Coluna no canto oposto ao selo -- estrela de favorito + selos de
     // qualidade (4K/HDR/LEG) empilhados, igual MediaCard.kt. Antes só a
     // estrela existia; detectQualityTags() já era chamado em
@@ -149,7 +149,7 @@
     ".cg-card .tags{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;align-items:flex-end;gap:3px;}" +
     // Cor padrão do Ukano (não mais dourado) -- pedido explícito,
     // mesma paridade aplicada no Roku/Android.
-    ".cg-card .fav-star{color:#E11D48;font-size:14px;}" + ".cg-card .tag{background:rgba(0,0,0,0.8);color:#fff;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;}" +
+    ".cg-card .fav-star{color:#E11D48;font-size:18.5px;}" + ".cg-card .tag{background:rgba(0,0,0,0.8);color:#fff;font-size:12px;font-weight:900;padding:2px 5px;border-radius:4px;}" +
     // Ancorada no .cover-wrap (não no card inteiro) -- com a grade
     // responsiva (grid-template-columns:auto-fill,minmax(130px,1fr)), um
     // "bottom" fixo em pixels relativo ao CARD desalinhava com o fim da
@@ -162,7 +162,7 @@
     // escuro semi-transparente) mas com a cor do tema pra se destacar
     // como um estado "positivo" (concluído), não só mais uma etiqueta.
     // Cor FIXA do Ukano (não var(--accent)) -- mesma paridade do Roku/Android.
-    ".cg-card .watched-badge{position:absolute;left:6px;bottom:6px;width:20px;height:20px;border-radius:50%;background:#E11D48;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;}" +
+    ".cg-card .watched-badge{position:absolute;left:6px;bottom:6px;width:20px;height:20px;border-radius:50%;background:#E11D48;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;}" +
     // -webkit-line-clamp:2 (não só min-height) -- igual minLines=maxLines=2
     // do Android: título de 1 linha ainda reserva a altura de 2 (fica com
     // espaço vazio embaixo, de propósito) E título longo corta com "..." em
@@ -172,7 +172,7 @@
     // Pedido explícito, confirmado ao vivo na TV: 12px/32px ficava ilegível
     // vendo do sofá. min-height recalculado pro mesmo invariante de 2
     // linhas sempre reservadas (15px * 1.3 de line-height * 2 linhas).
-    ".cg-card .cap{background:rgba(0,0,0,0.55);padding:8px 10px;color:#E2E8F0;font-size:15px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:40px;}";
+    ".cg-card .cap{background:rgba(0,0,0,0.55);padding:8px 10px 0;border-bottom:8px solid transparent;color:#E2E8F0;font-size:20px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:52px;}";
     document.head.appendChild(style);
   }
 
@@ -186,11 +186,13 @@
   // que faz getBoundingClientRect() em CADA .focusable visível a CADA
   // tecla de seta -- com 300 cards, isso é 300 cálculos de geometria por
   // tecla apertada, não só na entrada da tela.
-  var COLS = 8,
+  // 7 colunas (era 8) e legenda mais alta: letras maiores pedidas em 20/11
+  // ("letra pequena" na LG/Samsung). Cartão = capa 318 + legenda 68 + borda 4.
+  var COLS = 7,
     GAP = 14,
     PAD = 24,
-    COVER_H = 288,
-    CAP_H = 48,
+    COVER_H = 322,
+    CAP_H = 68,
     ROW_H = COVER_H + CAP_H + GAP;
   var BUFFER_ROWS = 2;
   function create(opts) {
@@ -450,7 +452,7 @@
           value: state.query,
           placeholder: "Buscar " + opts.title.toLowerCase() + "…"
         },
-        trailingHtml: opts.kind === "movie" ? '<button class="focusable" id="cg-sort" style="background:rgba(255,255,255,0.06);border:2px solid transparent;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;cursor:pointer;flex-shrink:0;">' + Icon("sort") + " " + (state.sort === "az" ? "A-Z" : "Recentes") + "</button>" : ""
+        trailingHtml: opts.kind === "movie" ? '<button class="focusable" id="cg-sort" style="background:rgba(255,255,255,0.06);border:2px solid transparent;color:#fff;padding:8px 16px;border-radius:20px;font-size:17.5px;cursor:pointer;flex-shrink:0;">' + Icon("sort") + " " + (state.sort === "az" ? "A-Z" : "Recentes") + "</button>" : ""
       }) + '  <div style="flex:1;display:flex;overflow:hidden;">' +
       // 300px (era 240px) -- pedido explícito: painel estreito demais
       // pra TV. colW do grid (ver renderGrid()) é calculado a partir da
@@ -781,8 +783,8 @@
   // novo" (foco começa nele) e "Voltar". Antes a tela ficava em
   // "Carregando…" pra sempre. root = .screen-content da tela.
   function showLoadError(root, message, onRetry, onBack) {
-    var btn = "display:flex;align-items:center;gap:8px;border:none;padding:14px 22px;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;";
-    root.innerHTML = '<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#050506;text-align:center;padding:0 60px;">' + '  <div style="font-size:34px;color:#EF4444;margin-bottom:14px;">' + Icon("warning") + "</div>" + '  <div style="color:#fff;font-size:20px;font-weight:800;">' + message + "</div>" + '  <div style="color:#9A9AA5;font-size:14px;margin-top:8px;">Confira a internet e tente de novo.</div>' + '  <div style="display:flex;gap:14px;margin-top:24px;">' + '    <button class="focusable" data-load-error="retry" style="' + btn + 'background:var(--accent);color:#000;">' + Icon("refresh") + " Tentar de novo</button>" + '    <button class="focusable" data-load-error="back" style="' + btn + 'background:rgba(255,255,255,0.08);color:#fff;">' + Icon("back") + " Voltar</button>" + "  </div>" + "</div>";
+    var btn = "display:flex;align-items:center;gap:8px;border:none;padding:14px 22px;border-radius:12px;font-size:20px;font-weight:900;cursor:pointer;";
+    root.innerHTML = '<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#050506;text-align:center;padding:0 60px;">' + '  <div style="font-size:37.5px;color:#EF4444;margin-bottom:14px;">' + Icon("warning") + "</div>" + '  <div style="color:#fff;font-size:26.5px;font-weight:800;">' + message + "</div>" + '  <div style="color:#9A9AA5;font-size:18.5px;margin-top:8px;">Confira a internet e tente de novo.</div>' + '  <div style="display:flex;gap:14px;margin-top:24px;">' + '    <button class="focusable" data-load-error="retry" style="' + btn + 'background:var(--accent);color:#000;">' + Icon("refresh") + " Tentar de novo</button>" + '    <button class="focusable" data-load-error="back" style="' + btn + 'background:rgba(255,255,255,0.08);color:#fff;">' + Icon("back") + " Voltar</button>" + "  </div>" + "</div>";
     var retry = root.querySelector('[data-load-error="retry"]');
     retry.addEventListener("sn:enter", onRetry);
     root.querySelector('[data-load-error="back"]').addEventListener("sn:enter", onBack);

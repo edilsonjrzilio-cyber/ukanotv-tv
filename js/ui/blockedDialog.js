@@ -11,7 +11,7 @@
     overlay.id = "blocked-overlay";
     overlay.setAttribute("data-sn-root", "");
     overlay.style.cssText = "position:absolute;top:0;right:0;bottom:0;left:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);";
-    overlay.innerHTML = '<div style="width:560px;background:#111318;border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:28px;text-align:center;">' + '  <div style="font-size:32px;margin-bottom:10px;color:#EF4444;">' + Icon("warning") + "</div>" + '  <div id="blocked-msg" style="color:#fff;font-size:16px;font-weight:700;line-height:24px;margin-bottom:22px;"></div>' + '  <button class="focusable" id="blocked-ok" data-sn-autofocus style="background:var(--accent);color:#000;border:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;">Entendi</button>' + "</div>";
+    overlay.innerHTML = '<div style="width:560px;background:#111318;border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:28px;text-align:center;">' + '  <div style="font-size:35px;margin-bottom:10px;color:#EF4444;">' + Icon("warning") + "</div>" + '  <div id="blocked-msg" style="color:#fff;font-size:21.5px;font-weight:700;line-height:29px;margin-bottom:22px;"></div>' + '  <button class="focusable" id="blocked-ok" data-sn-autofocus style="background:var(--accent);color:#000;border:none;padding:12px 28px;border-radius:10px;font-size:18.5px;font-weight:900;cursor:pointer;">Entendi</button>' + "</div>";
     document.body.appendChild(overlay);
     return overlay;
   }

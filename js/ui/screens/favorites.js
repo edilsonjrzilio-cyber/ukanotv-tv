@@ -65,7 +65,7 @@
     // TV ao vivo em linhas, uma embaixo da outra; Filmes/Séries em grade.
     grid.style.display = state.activeKind === "live" ? "block" : "flex";
     if (!totalAll) {
-      grid.innerHTML = '<div style="width:100%;text-align:center;padding:60px 0;color:#9A9AA5;"><div style="color:#fff;font-weight:700;font-size:16px;margin-bottom:6px;">Nenhum favorito ainda</div>Use o ♥ do canal, do filme ou da série pra favoritar.</div>';
+      grid.innerHTML = '<div style="width:100%;text-align:center;padding:60px 0;color:#9A9AA5;"><div style="color:#fff;font-weight:700;font-size:21.5px;margin-bottom:6px;">Nenhum favorito ainda</div>Use o ♥ do canal, do filme ou da série pra favoritar.</div>';
       return;
     }
     if (!items.length) {

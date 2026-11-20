@@ -20,12 +20,12 @@
     overlay.setAttribute("data-sn-root", "");
     // Abaixo do aviso de bloqueio (z-index 60): ele sempre ganha.
     overlay.style.cssText = "position:absolute;top:0;right:0;bottom:0;left:0;z-index:55;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);";
-    overlay.innerHTML = '<div id="choice-box" style="width:560px;background:#111318;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px;">' + '  <div id="choice-title" style="color:#fff;font-size:20px;font-weight:800;line-height:28px;"></div>' + '  <div id="choice-msg" style="color:#CBD5E1;font-size:15px;line-height:22px;margin-top:10px;white-space:pre-line;"></div>' + '  <div id="choice-buttons" style="margin-top:22px;"></div>' + "</div>";
+    overlay.innerHTML = '<div id="choice-box" style="width:560px;background:#111318;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px;">' + '  <div id="choice-title" style="color:#fff;font-size:26.5px;font-weight:800;line-height:33.5px;"></div>' + '  <div id="choice-msg" style="color:#CBD5E1;font-size:20px;line-height:26.5px;margin-top:10px;white-space:pre-line;"></div>' + '  <div id="choice-buttons" style="margin-top:22px;"></div>' + "</div>";
     document.body.appendChild(overlay);
     if (!document.querySelector("#choice-style")) {
       var style = document.createElement("style");
       style.id = "choice-style";
-      style.textContent = ".choice-btn{display:block;width:100%;margin-top:10px;padding:14px 18px;border-radius:10px;border:2px solid transparent;background:#26262E;color:#fff;font-size:15px;font-weight:800;cursor:pointer;}" + ".choice-btn:first-child{margin-top:0;}" + ".choice-btn.accent{background:var(--accent);color:#000;}" + ".choice-btn.sn-focused{border-color:#fff;transform:scale(1.03);}" +
+      style.textContent = ".choice-btn{display:block;width:100%;margin-top:10px;padding:14px 18px;border-radius:10px;border:2px solid transparent;background:#26262E;color:#fff;font-size:20px;font-weight:800;cursor:pointer;}" + ".choice-btn:first-child{margin-top:0;}" + ".choice-btn.accent{background:var(--accent);color:#000;}" + ".choice-btn.sn-focused{border-color:#fff;transform:scale(1.03);}" +
       // Botões lado a lado (confirmação de Remover, igual o Android).
       ".choice-row .choice-btn{display:inline-block;width:auto;margin:0 10px 0 0;padding:12px 24px;}";
       document.head.appendChild(style);

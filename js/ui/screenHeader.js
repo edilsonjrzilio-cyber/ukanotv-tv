@@ -31,12 +31,12 @@
     // ícone virava preto -- duas mudanças que o Android não faz aqui
     // (ele só preenche sólido+texto preto em botões de AÇÃO primária,
     // não neste botão secundário de voltar).
-    ".ch-back{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}" +
+    ".ch-back{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}" +
     // border-width:0 -- cancela a borda genérica de 3px que
     // .focusable.sn-focused (theme.css) desenharia por baixo; o
     // BackButton do Android não tem NENHUMA borda, só o tingimento do
     // fundo acima.
-    ".ch-back.sn-focused{background:color-mix(in srgb,var(--accent) 30%,transparent);color:#fff;border-width:0 !important;}" + "@supports not (background: color-mix(in srgb, red, blue)) { .ch-back.sn-focused{background:rgba(225,29,72,0.3);} }" + ".ch-clock-time{color:#fff;font-size:15px;font-weight:700;}" + ".ch-clock-date{color:#8B93A1;font-size:10.5px;}" +
+    ".ch-back.sn-focused{background:color-mix(in srgb,var(--accent) 30%,transparent);color:#fff;border-width:0 !important;}" + "@supports not (background: color-mix(in srgb, red, blue)) { .ch-back.sn-focused{background:rgba(225,29,72,0.3);} }" + ".ch-clock-time{color:#fff;font-size:20px;font-weight:700;}" + ".ch-clock-date{color:#8B93A1;font-size:14px;}" +
     // Chip de busca CENTRALIZADO -- igual SearchChip do Android
     // (ContentHeader.kt): fica entre o título e o relógio, não mais um
     // botão solto no canto direito junto do resto. Vira campo de texto
@@ -46,7 +46,7 @@
     // mover").
     // Aumentado (era min-width:260/max:360/height:40/font:13) -- pedido
     // explícito: "poderia ser maior pra ficar mais bonito".
-    ".ch-search{display:flex;align-items:center;gap:10px;min-width:340px;max-width:460px;height:52px;padding:0 18px;border-radius:12px;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);color:#8B93A1;font-size:15px;cursor:pointer;flex-shrink:0;}" + ".ch-search .ic{flex-shrink:0;display:flex;font-size:18px;color:#8B93A1;}" + ".ch-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}" + ".ch-search.has-query{color:#fff;background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);}" + ".ch-search.has-query .ic,.ch-search.has-query .txt{color:#fff;}" + ".ch-search.sn-focused{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent);}" + "@supports not (background: color-mix(in srgb, red, blue)) { .ch-search.has-query,.ch-search.sn-focused{background:rgba(225,29,72,0.2);} }";
+    ".ch-search{display:flex;align-items:center;gap:10px;min-width:340px;max-width:460px;height:52px;padding:0 18px;border-radius:12px;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);color:#8B93A1;font-size:20px;cursor:pointer;flex-shrink:0;}" + ".ch-search .ic{flex-shrink:0;display:flex;font-size:24px;color:#8B93A1;}" + ".ch-search .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;}" + ".ch-search.has-query{color:#fff;background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);}" + ".ch-search.has-query .ic,.ch-search.has-query .txt{color:#fff;}" + ".ch-search.sn-focused{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent);}" + "@supports not (background: color-mix(in srgb, red, blue)) { .ch-search.has-query,.ch-search.sn-focused{background:rgba(225,29,72,0.2);} }";
     document.head.appendChild(style);
   }
 
@@ -62,7 +62,7 @@
       var q = opts.search.value || "";
       searchHtml = '<button class="focusable ch-search' + (q ? " has-query" : "") + '" id="ch-search" data-placeholder="' + escapeHtml(opts.search.placeholder || "Buscar…") + '">' + '  <span class="ic">' + Icon("search") + "</span>" + '  <span class="txt">' + (q ? escapeHtml(q) : opts.search.placeholder || "Buscar…") + "</span>" + "</button>";
     }
-    return '<div class="screen-header" style="padding:20px 40px;">' + '  <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0;">' + '    <button class="focusable ch-back" id="ch-back">' + Icon("back") + "</button>" + '    <div class="title" style="letter-spacing:normal;text-transform:none;font-size:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + opts.title + "</div>" + "  </div>" + searchHtml + '  <div style="display:flex;align-items:center;gap:16px;flex:1;justify-content:flex-end;min-width:0;">' + (opts.trailingHtml || "") + '    <div style="text-align:right;flex-shrink:0;">' + '      <div class="ch-clock-time" id="ch-clock-time"></div>' + '      <div class="ch-clock-date" id="ch-clock-date"></div>' + "    </div>" + "  </div>" + "</div>";
+    return '<div class="screen-header" style="padding:20px 40px;">' + '  <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0;">' + '    <button class="focusable ch-back" id="ch-back">' + Icon("back") + "</button>" + '    <div class="title" style="letter-spacing:normal;text-transform:none;font-size:25.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + opts.title + "</div>" + "  </div>" + searchHtml + '  <div style="display:flex;align-items:center;gap:16px;flex:1;justify-content:flex-end;min-width:0;">' + (opts.trailingHtml || "") + '    <div style="text-align:right;flex-shrink:0;">' + '      <div class="ch-clock-time" id="ch-clock-time"></div>' + '      <div class="ch-clock-date" id="ch-clock-date"></div>' + "    </div>" + "  </div>" + "</div>";
   }
   function escapeHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

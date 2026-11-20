@@ -423,7 +423,7 @@
     var rows = "";
     if (hasBackup) rows += listRowHtml("backup", "Voltar pra conta anterior", "Restaura a conta de antes da última troca de lista", false, true);
     if (resellerServers.length) {
-      rows += '<div style="color:#9A9AA5;font-size:12px;font-weight:700;margin-top:6px;">Servidores do seu plano</div>';
+      rows += '<div style="color:#9A9AA5;font-size:16px;font-weight:700;margin-top:6px;">Servidores do seu plano</div>';
       resellerServers.forEach(function (s) {
         rows += listRowHtml("server:" + s.id, esc(withBrand(brand, s.label)), kindLabel(s.kind), s.id === creds.currentServerId, false);
       });
@@ -434,7 +434,7 @@
     otherRows = {};
     var others = creds && creds.otherResellers || [];
     if (others.length) {
-      rows += '<div style="color:#9A9AA5;font-size:12px;font-weight:700;margin-top:6px;">Outras listas deste aparelho</div>';
+      rows += '<div style="color:#9A9AA5;font-size:16px;font-weight:700;margin-top:6px;">Outras listas deste aparelho</div>';
       others.forEach(function (other) {
         var name = PanelApi.otherResellerName(other);
         var servers = other.servers && other.servers.length ? other.servers : [null];
@@ -452,7 +452,7 @@
       rows += listRowHtml("current", currentAccountLabel(creds), "Conta atual", true, false);
     }
     if (!state.lists.length) {
-      rows += '<div style="color:#9A9AA5;font-size:13px;">Nenhuma lista salva ainda. Adicione uma pra trocar rápido depois.</div>';
+      rows += '<div style="color:#9A9AA5;font-size:17.5px;">Nenhuma lista salva ainda. Adicione uma pra trocar rápido depois.</div>';
     } else {
       state.lists.forEach(function (entry) {
         rows += listRowHtml("list:" + entry.id, entry.label, kindLabel(entry.kind), activeEntry && activeEntry.id === entry.id, true);
@@ -466,8 +466,8 @@
     // backup, as últimas linhas podiam ficar inalcançáveis pelo D-pad.
     root.innerHTML = '<div style="display:flex;flex-direction:column;height:100%;">' + ContentHeaderBar.html({
       title: "Suas Listas",
-      trailingHtml: (state.switching ? '<span style="color:var(--accent);font-size:13px;margin-right:12px;">Trocando…</span>' : "") + (state.removing ? '<span style="color:var(--accent);font-size:13px;margin-right:12px;">Removendo…</span>' : "") + '<button class="focusable" id="lists-add" style="background:rgba(108,92,231,0.18);border:2px solid #6C5CE7;color:#fff;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">' + Icon("plus") + " Adicionar lista</button>"
-    }) + '<div style="flex:1;min-height:0;overflow-y:auto;padding:32px;display:flex;flex-direction:column;gap:12px;max-width:640px;" data-sn-scroll>' + (state.error ? '<div style="color:#FF6B6B;font-size:12px;">' + state.error + "</div>" : "") + rows + "</div>" + "</div>";
+      trailingHtml: (state.switching ? '<span style="color:var(--accent);font-size:17.5px;margin-right:12px;">Trocando…</span>' : "") + (state.removing ? '<span style="color:var(--accent);font-size:17.5px;margin-right:12px;">Removendo…</span>' : "") + '<button class="focusable" id="lists-add" style="background:rgba(108,92,231,0.18);border:2px solid #6C5CE7;color:#fff;padding:8px 16px;border-radius:10px;font-size:17.5px;font-weight:700;cursor:pointer;flex-shrink:0;">' + Icon("plus") + " Adicionar lista</button>"
+    }) + '<div style="flex:1;min-height:0;overflow-y:auto;padding:32px;display:flex;flex-direction:column;gap:12px;max-width:640px;" data-sn-scroll>' + (state.error ? '<div style="color:#FF6B6B;font-size:16px;">' + state.error + "</div>" : "") + rows + "</div>" + "</div>";
     ContentHeaderBar.bind(root, function () {
       Router.go("settings");
     });
@@ -492,7 +492,7 @@
     if (restored) SN.setFocus(restored);else SN.focusFirst(document.querySelector('.screen[data-screen="lists"]'));
   }
   function listRowHtml(id, title, subtitle, active, removable) {
-    return '<div class="focusable lists-row' + (active ? " active" : "") + '" data-row-id="' + id + '">' + '  <div><div style="color:#fff;font-size:14px;font-weight:700;">' + (active ? "★ " : "") + title + "</div>" + '  <div style="color:#9A9AA5;font-size:11px;">' + subtitle + "</div></div>" + (removable ? '<button class="focusable" data-remove style="background:transparent;border:none;color:#FF6B6B;font-size:12px;font-weight:700;cursor:pointer;">Remover</button>' : "") + "</div>";
+    return '<div class="focusable lists-row' + (active ? " active" : "") + '" data-row-id="' + id + '">' + '  <div><div style="color:#fff;font-size:18.5px;font-weight:700;">' + (active ? "★ " : "") + title + "</div>" + '  <div style="color:#9A9AA5;font-size:14.5px;">' + subtitle + "</div></div>" + (removable ? '<button class="focusable" data-remove style="background:transparent;border:none;color:#FF6B6B;font-size:16px;font-weight:700;cursor:pointer;">Remover</button>' : "") + "</div>";
   }
   function onRowClick(id) {
     if (id === "backup") {

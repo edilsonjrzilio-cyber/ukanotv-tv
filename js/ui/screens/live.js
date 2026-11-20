@@ -129,7 +129,7 @@
     // min-width:0 + ellipsis no nome -- mesmo bug/mesma correção de
     // contentGrid.js nesta sessão: categoria com nome comprido estourava
     // a largura fixa de 280px do painel em vez de cortar com "...".
-    ".live-cat{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#fff;font-size:13px;font-weight:700;cursor:pointer;text-align:left;}" + ".live-cat.active{background:var(--accent);color:#000;}" +
+    ".live-cat{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.04);color:#fff;font-size:17.5px;font-weight:700;cursor:pointer;text-align:left;}" + ".live-cat.active{background:var(--accent);color:#000;}" +
     // Sem tingimento de fundo no foco aqui (diferente de contentGrid.js)
     // -- LiveCategoryList.kt do Android só muda a BORDA no foco, o fundo
     // é só binário ativo/não-ativo. Ativo+focado ganha borda BRANCA
@@ -138,7 +138,7 @@
     ".live-cat.sn-focused{border-color:var(--accent);}" + ".live-cat.active.sn-focused{border-color:#fff !important;}" + ".live-cat .ic{flex-shrink:0;display:flex;color:#9AA2B1;}" + ".live-cat.active .ic{color:#000;}" +
     // Quebra em até 2 linhas (não mais 1 linha + "...") -- regra: nome
     // da categoria sempre aparece inteiro.
-    ".live-cat .label{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-cat .cnt{flex-shrink:0;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;font-size:11px;color:#9AA2B1;}" + ".live-cat.active .cnt{background:rgba(0,0,0,0.2);color:#000;}" + ".live-cat .chev{flex-shrink:0;display:flex;color:#6B7280;}" + ".live-cat.active .chev{color:#000;}" + ".live-cat-divider{height:1px;background:rgba(255,255,255,0.12);margin:6px 0;}" +
+    ".live-cat .label{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-cat .cnt{flex-shrink:0;background:rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;font-size:14.5px;color:#9AA2B1;}" + ".live-cat.active .cnt{background:rgba(0,0,0,0.2);color:#000;}" + ".live-cat .chev{flex-shrink:0;display:flex;color:#6B7280;}" + ".live-cat.active .chev{color:#000;}" + ".live-cat-divider{height:1px;background:rgba(255,255,255,0.12);margin:6px 0;}" +
     // Fundo tingido na cor do tema (não cinza chapado) ao focar/
     // selecionar -- igual ChannelRow.kt (withAlpha(accent,0.18f) pra
     // AMBOS "rowFocused || isSelected"). Vermelho FIXO só na borda de
@@ -155,7 +155,7 @@
     // digitos pra nao empurrar o resto da linha quando o indice troca
     // de 2 pra 3 digitos.
     // 36px = 4 dígitos (o número do servidor passa de mil).
-    ".live-row .num{width:36px;flex-shrink:0;color:#6B7280;font-size:12px;font-weight:500;}" + ".live-row .icon{width:40px;height:40px;border-radius:50%;background:#0B1220;display:flex;align-items:center;justify-content:center;color:#CBD5E1;font-weight:900;flex-shrink:0;overflow:hidden;}" + ".live-row .icon img{width:32px;height:32px;object-fit:contain;}" +
+    ".live-row .num{width:46px;flex-shrink:0;color:#6B7280;font-size:16px;font-weight:500;}" + ".live-row .icon{width:52px;height:52px;border-radius:50%;background:#0B1220;display:flex;align-items:center;justify-content:center;color:#CBD5E1;font-weight:900;flex-shrink:0;overflow:hidden;}" + ".live-row .icon img{width:44px;height:44px;object-fit:contain;}" +
     // Nome + categoria empilhados (igual ChannelRow do Android) -- antes
     // só tinha o nome, fileira de canais ficava parecendo vazia demais
     // numa coluna larga (pedido explícito: "o meio dos canal bem
@@ -163,7 +163,7 @@
     ".live-row .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}" +
     // Mesma regra do nome da categoria -- nome do canal sempre inteiro,
     // quebra em até 2 linhas em vez de cortar.
-    ".live-row .name{color:#fff;font-size:15px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-row .group{color:#9AA2B1;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" + ".live-row .heart{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6B7280;}" +
+    ".live-row .name{color:#fff;font-size:20px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" + ".live-row .group{color:#9AA2B1;font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" + ".live-row .heart{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6B7280;}" +
     // border-color sozinho não desenha nada sem border-style/width --
     // faltava o "border:2px solid transparent" base acima; sem ele,
     // esse border-color nunca tinha efeito nenhum (bug real: o anel
@@ -434,12 +434,12 @@
     stopPreview();
     previewVideo = null;
     if (!state.selected) {
-      el.innerHTML = '<div style="color:#6B7280;font-size:13px;">Selecione um canal pra ver a prévia.</div>';
+      el.innerHTML = '<div style="color:#6B7280;font-size:17.5px;">Selecione um canal pra ver a prévia.</div>';
       return;
     }
     var ch = state.selected;
     var creds = SessionStore.loadCreds();
-    el.innerHTML = '<div style="color:#fff;font-size:16px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ch.name + "</div>" + '<div style="color:#6B7280;font-size:11.5px;margin:4px 0 10px;">Selecione de novo pra assistir</div>' +
+    el.innerHTML = '<div style="color:#fff;font-size:21.5px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ch.name + "</div>" + '<div style="color:#6B7280;font-size:15.5px;margin:4px 0 10px;">Selecione de novo pra assistir</div>' +
     // padding-top (56.25% = 9/16) em vez de aspect-ratio -- mesmo motivo
     // dos outros casos no app (Chromium 88+ só); wrapper relative +
     // vídeo absolute preenchendo, já que o vídeo é de largura fluida
@@ -466,7 +466,7 @@
           var d = new Date(ms);
           return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
         };
-        return '<div class="epg-row' + (isNow ? " now" : "") + '">' + '  <div style="display:flex;align-items:center;gap:8px;">' + '    <span style="color:#9AA2B1;display:flex;flex-shrink:0;">' + Icon("live") + "</span>" + '    <span style="color:#fff;font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + entry.title + "</span>" + '    <span style="font-size:10px;font-weight:900;padding:3px 10px;border-radius:20px;background:' + (isNow ? "rgba(239,68,68,0.2);color:#FCA5A5" : "rgba(22,163,74,0.13);color:#86EFAC") + ';">' + (isNow ? "Ao Vivo" : "Próximo") + "</span>" + "  </div>" + '  <div style="display:flex;justify-content:space-between;margin-top:6px;color:#9AA2B1;font-size:11px;">' + "    <span>" + fmt(entry.startMs) + " - " + fmt(entry.endMs) + "</span><span>" + Math.round(progress * 100) + "%</span>" + "  </div>" + (isNow ? '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.2);margin-top:6px;"><div style="height:3px;border-radius:2px;background:var(--accent);width:' + progress * 100 + '%;"></div></div>' : "") + "</div>";
+        return '<div class="epg-row' + (isNow ? " now" : "") + '">' + '  <div style="display:flex;align-items:center;gap:8px;">' + '    <span style="color:#9AA2B1;display:flex;flex-shrink:0;">' + Icon("live") + "</span>" + '    <span style="color:#fff;font-size:17.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + entry.title + "</span>" + '    <span style="font-size:13.5px;font-weight:900;padding:3px 10px;border-radius:20px;background:' + (isNow ? "rgba(239,68,68,0.2);color:#FCA5A5" : "rgba(22,163,74,0.13);color:#86EFAC") + ';">' + (isNow ? "Ao Vivo" : "Próximo") + "</span>" + "  </div>" + '  <div style="display:flex;justify-content:space-between;margin-top:6px;color:#9AA2B1;font-size:14.5px;">' + "    <span>" + fmt(entry.startMs) + " - " + fmt(entry.endMs) + "</span><span>" + Math.round(progress * 100) + "%</span>" + "  </div>" + (isNow ? '<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.2);margin-top:6px;"><div style="height:3px;border-radius:2px;background:var(--accent);width:' + progress * 100 + '%;"></div></div>' : "") + "</div>";
       }).join("");
     });
   }

@@ -31,7 +31,7 @@
     var el = document.createElement("div");
     el.className = "ch-badge";
     el.style.cssText = "display:none;position:" + (fixed ? "fixed" : "absolute") + ";left:50%;top:" + topPx + "px;" + "-webkit-transform:translateX(-50%);transform:translateX(-50%);z-index:50;align-items:center;" + "padding:12px 22px;border-radius:14px;background:rgba(0,0,0,0.85);border:2px solid var(--accent);" + "max-width:640px;box-sizing:border-box;white-space:nowrap;";
-    el.innerHTML = '<span class="ch-badge-num" style="color:var(--accent);font-size:22px;font-weight:900;flex-shrink:0;"></span>' + '<span class="ch-badge-name" style="margin-left:14px;color:#fff;font-size:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;"></span>';
+    el.innerHTML = '<span class="ch-badge-num" style="color:var(--accent);font-size:26.5px;font-weight:900;flex-shrink:0;"></span>' + '<span class="ch-badge-name" style="margin-left:14px;color:#fff;font-size:26.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;"></span>';
     parent.appendChild(el);
     return {
       show: function show(num, name, dim) {
