@@ -86,9 +86,10 @@
   }
 
   // Catálogo que não veio (internet caiu, servidor da lista fora ou lento
-  // demais): a pessoa escolhe. "Tentar de novo" baixa de novo só o que faltou
-  // (o que já veio fica guardado); "Entrar assim mesmo" abre a Início, e a
-  // tela que faltou tenta de novo quando for aberta. Voltar = tentar de novo.
+  // demais): só "Tentar de novo", que baixa de novo só o que faltou (o que
+  // já veio fica guardado). Sem "Entrar assim mesmo" de propósito -- pedido
+  // de 20/11: "não pode entrar de nenhuma forma sem carregar 100%, senão
+  // pode travar lá dentro". Voltar também tenta de novo.
   function askCatalogRetry(creds, missing) {
     hideBootOverlay();
     var names = missing.map(function (k) {
@@ -106,9 +107,6 @@
           showBootOverlay("Carregando catálogo…");
           finishLogin(creds);
         }
-      }, {
-        label: "Entrar assim mesmo",
-        onSelect: enterHome
       }],
       focus: 0,
       back: 0
