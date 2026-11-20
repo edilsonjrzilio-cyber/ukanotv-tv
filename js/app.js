@@ -44,46 +44,95 @@
   // parado na tela de carregamento (onde soluçar não importa, não tem
   // D-pad pra responder ainda), com progresso REAL (contagem por tipo,
   // igual o VerifyingScreen.kt do Android) em vez de um spinner cego.
-  // timeoutMs é só uma rede de segurança (provedor truly travado/offline),
-  // não o caminho normal -- generoso de propósito.
-  var PREFETCH_SAFETY_TIMEOUT_MS = 20000;
+  //
+  // 20/11: sem prazo de segurança curto. Antes, passados 20 s, entrava na
+  // Início com o catálogo ainda chegando, e o JSON.parse de milhares de itens
+  // rodava por trás com a pessoa já mexendo: a tela travava ("não baixou o
+  // catálogo, entrou e ficou travado"). Mesma decisão do Android do mesmo dia
+  // (só entra com o catálogo completo). A espera sempre termina: cada pedido
+  // tem teto de 4 min (XtreamApi.REQUEST_CAP_MS). Se algum catálogo falhar,
+  // pergunta (askCatalogRetry) em vez de entrar com ele faltando.
   function finishLogin(creds) {
     // Sessão nova (ou recarregada): um bloqueio de antes já foi tratado.
     blockPending = false;
-    ensureWorkingServer(creds).then(function (current) {
-      return prefetchCatalog(current).then(function (failed) {
+    var current = creds;
+    var missing = [];
+    ensureWorkingServer(creds).then(function (checked) {
+      current = checked;
+      return prefetchCatalog(current).then(function (failedKinds) {
         // Respondeu a conferência mas o catálogo não veio (bloqueio pela
         // metade, servidor instável): tenta os outros DNS também antes de
-        // seguir com o catálogo faltando. Uma vez só.
-        if (!failed || !hasAlternateDns(current) || navigator.onLine === false) return;
+        // desistir. Uma vez só.
+        if (!failedKinds.length || !hasAlternateDns(current) || navigator.onLine === false) return failedKinds;
         return findWorkingDns(current).then(function (found) {
-          if (found) return prefetchCatalog(adoptDns(found));
+          if (!found) return failedKinds;
+          current = adoptDns(found);
+          return prefetchCatalog(current);
         });
       });
-    }).catch(function () {}).then(function () {
+    }).then(function (failedKinds) {
+      missing = failedKinds || [];
+    }, function () {}).then(function () {
       hideNoticeLater();
       // O aviso do painel ao trocar de DNS (adoptDns) pode ter encerrado a
       // sessão no meio: fica no aviso, sem abrir a Início por trás.
       if (blockPending) return;
-      Router.go("home");
-      startHeartbeatLoop();
-      // Listas novas do painel (cadastradas depois do login) entram na sessão
-      // sem precisar abrir Suas Listas, igual o Android e a Roku ao abrir.
-      // Melhor esforço, em segundo plano, depois do catálogo.
-      if (global.ListsScreen) setTimeout(function () {
-        global.ListsScreen.refreshServers();
-      }, 4000);
+      if (missing.length) {
+        askCatalogRetry(current, missing);
+        return;
+      }
+      enterHome();
     });
   }
 
-  // Resolve true se algum dos 3 catálogos falhou de verdade (não conta o
-  // que só passou do prazo de segurança, que segue em segundo plano).
+  // Catálogo que não veio (internet caiu, servidor da lista fora ou lento
+  // demais): a pessoa escolhe. "Tentar de novo" baixa de novo só o que faltou
+  // (o que já veio fica guardado); "Entrar assim mesmo" abre a Início, e a
+  // tela que faltou tenta de novo quando for aberta. Voltar = tentar de novo.
+  function askCatalogRetry(creds, missing) {
+    hideBootOverlay();
+    var names = missing.map(function (k) {
+      return PREFETCH_LABEL[k];
+    });
+    var list = names.length > 1 ? names.slice(0, -1).join(", ") + " e " + names[names.length - 1] : names[0];
+    var offline = navigator.onLine === false;
+    ChoiceDialog.show({
+      title: "O catálogo não carregou",
+      message: (offline ? "A TV está sem internet. " : "") + "Não deu pra carregar " + list + "." + (offline ? "\nConfira o Wi-Fi ou o cabo e tente de novo." : "\nPode ser a internet ou o servidor da lista demorando. Tente de novo em instantes."),
+      buttons: [{
+        label: "Tentar de novo",
+        accent: true,
+        onSelect: function onSelect() {
+          showBootOverlay("Carregando catálogo…");
+          finishLogin(creds);
+        }
+      }, {
+        label: "Entrar assim mesmo",
+        onSelect: enterHome
+      }],
+      focus: 0,
+      back: 0
+    });
+  }
+  function enterHome() {
+    Router.go("home");
+    startHeartbeatLoop();
+    // Listas novas do painel (cadastradas depois do login) entram na sessão
+    // sem precisar abrir Suas Listas, igual o Android e a Roku ao abrir.
+    // Melhor esforço, em segundo plano, depois do catálogo.
+    if (global.ListsScreen) setTimeout(function () {
+      global.ListsScreen.refreshServers();
+    }, 4000);
+  }
+
+  // Resolve com os tipos ("live", "vod", "series") que falharam -- lista
+  // vazia = os 3 vieram. Espera os 3 terminarem (ver finishLogin).
   function prefetchCatalog(creds) {
     showBootOverlay("Carregando catálogo…");
     var counts = {};
-    var failed = false;
-    var prefetch = XtreamApi.prefetchAll(creds, function (kind, list) {
-      if (!list) failed = true;
+    var failedKinds = [];
+    return XtreamApi.prefetchAll(creds, function (kind, list) {
+      if (!list) failedKinds.push(kind);
       counts[kind] = list ? list.length : 0;
       // Já deixa cada item marcado como +18 ou não (fica guardado no item):
       // era o grosso da 1ª abertura de Filmes (~1,5 s na Samsung 2019) e
@@ -95,12 +144,8 @@
         return counts[k] + " " + PREFETCH_LABEL[k];
       });
       showBootOverlay(parts.join(" · ") + (parts.length < 3 ? "…" : ""));
-    });
-    var safety = new Promise(function (resolve) {
-      setTimeout(resolve, PREFETCH_SAFETY_TIMEOUT_MS);
-    });
-    return Promise.race([prefetch, safety]).then(function () {
-      return failed;
+    }).then(function () {
+      return failedKinds;
     });
   }
   function hasAlternateDns(creds) {
