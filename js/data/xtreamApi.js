@@ -136,22 +136,34 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
 
   // ServerHealth: "ok" | "invalid_credentials" | "unknown"
   // quick = prazo curto (conferência de DNS, ver getJsonQuick).
-  function xtreamAuthCheck(creds, quick) {
-    return (quick ? getJsonQuick : getJson)(apiBase(creds)).then(function (text) {
-      var map;
-      try {
-        map = JSON.parse(text);
-      } catch (e) {
-        return "unknown";
-      }
-      var info = map && map.user_info;
-      if (!info) return "unknown";
-      var auth = info.auth;
-      var authOk = auth === 1 || auth === "1";
-      var status = (info.status || "").toString().toLowerCase();
-      return authOk && (status === "" || status === "active") ? "ok" : "invalid_credentials";
-    }).catch(function () {
+  function healthFromText(text) {
+    var map;
+    try {
+      map = JSON.parse(text);
+    } catch (e) {
       return "unknown";
+    }
+    // Resposta de um pedido com "action" (ver abaixo): lista = conta aceita.
+    if (Array.isArray(map)) return "ok";
+    var info = map && map.user_info;
+    if (!info) return "unknown";
+    var auth = info.auth;
+    var authOk = auth === 1 || auth === "1";
+    var status = (info.status || "").toString().toLowerCase();
+    return authOk && (status === "" || status === "active") ? "ok" : "invalid_credentials";
+  }
+  // Na página do Media Station (20/11, medido numa LG): o servidor responde
+  // o pedido de login (sem "action") SEM liberar a página (CORS), e a TV
+  // barra na hora; os pedidos com "action" passam. A conferência dava sempre
+  // "sem resposta" e a troca sozinha de DNS/servidor nunca funcionava ali.
+  // Falhou sem ser por prazo: confere de novo pela lista de categorias.
+  function xtreamAuthCheck(creds, quick) {
+    var get = quick ? getJsonQuick : getJson;
+    return get(apiBase(creds)).then(healthFromText, function (e) {
+      if (e && e.message === "timeout") return "unknown";
+      return get(apiBase(creds) + "&action=get_live_categories").then(healthFromText, function () {
+        return "unknown";
+      });
     });
   }
   function isServerHealthy(creds) {
