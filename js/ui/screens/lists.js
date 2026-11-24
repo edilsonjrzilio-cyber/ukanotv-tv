@@ -292,7 +292,22 @@
         var keep = latest.currentServerId && result.servers.some(function (s) {
           return s.id === latest.currentServerId;
         });
-        if (!keep && result.m3u_url && result.current_server_id) {
+        // O revendedor trocou a conta (ou o servidor) na edição do cliente: o
+        // painel muda a MESMA linha, sem mudar o id, então o servidor em uso
+        // continua na lista, mas com outra conta. Antes o app seguia na conta
+        // antiga pra sempre (caso real de 24/11, LG pelo Media Station X: a
+        // conta antiga venceu e a nova nunca chegava). Vale só pro servidor
+        // PADRÃO (o link que o painel manda é o dele) e olha a conta e o
+        // servidor, não o DNS: o app pode estar noutro DNS do mesmo servidor
+        // de propósito.
+        var doPainel = keep && result.m3u_url && latest.currentServerId === result.current_server_id ? PanelApi.credsOnServer(latest, result.current_server_id, result) : null;
+        var contaMudou = !!doPainel && (doPainel.mode !== latest.mode || (doPainel.mode === "xtream" ? doPainel.username !== latest.username || doPainel.password !== latest.password || ![doPainel.url].concat(result.alternate_urls || []).some(function (u) {
+          return PanelApi.sameDns(u, latest.url);
+        }) : doPainel.m3uUrl !== latest.m3uUrl));
+        if (contaMudou) {
+          latest = doPainel;
+          mudouConexao = true;
+        } else if (!keep && result.m3u_url && result.current_server_id) {
           // O servidor em uso não está mais na lista do painel (foi tirado,
           // ou a sessão é de antes dela): passa pro PADRÃO de verdade, com a
           // conexão dele. Antes só punha a ★ no padrão e seguia na conexão

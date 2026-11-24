@@ -52,7 +52,18 @@
   // (só entra com o catálogo completo). A espera sempre termina: cada pedido
   // tem teto de 4 min (XtreamApi.REQUEST_CAP_MS). Se algum catálogo falhar,
   // pergunta (askCatalogRetry) em vez de entrar com ele faltando.
+  // Quantas vezes finishLogin começou: quem esperava o painel sabe se ele já
+  // recarregou com a conexão nova (ver askPanelThenRetry).
+  var finishCount = 0;
+  var catalogDialogOpen = false;
   function finishLogin(creds) {
+    finishCount++;
+    // O painel respondeu atrasado com outra conta e recarregou: o aviso do
+    // catálogo da conta antiga sai da frente.
+    if (catalogDialogOpen) {
+      catalogDialogOpen = false;
+      ChoiceDialog.close();
+    }
     // Sessão nova (ou recarregada): um bloqueio de antes já foi tratado.
     blockPending = false;
     var current = creds;
@@ -78,7 +89,7 @@
       // sessão no meio: fica no aviso, sem abrir a Início por trás.
       if (blockPending) return;
       if (missing.length) {
-        askCatalogRetry(current, missing);
+        askPanelThenRetry(current, missing);
         return;
       }
       enterHome();
@@ -90,8 +101,30 @@
   // já veio fica guardado). Sem "Entrar assim mesmo" de propósito -- pedido
   // de 20/11: "não pode entrar de nenhuma forma sem carregar 100%, senão
   // pode travar lá dentro". Voltar também tenta de novo.
+  // Antes do aviso, pergunta ao painel qual é a conexão certa. O painel só
+  // era consultado depois de entrar na Início, então quem ficava sem catálogo
+  // nunca recebia a troca feita no painel: "Tentar de novo" repetia com a
+  // conta antiga pra sempre (caso real de 24/11, LG pelo Media Station X: o
+  // revendedor trocou a conta vencida pela nova e a TV ficou presa no aviso).
+  // Se o painel mandar outra conta/servidor, ListsScreen.refreshServers já
+  // recarrega com ela (onLoggedIn -> finishLogin). Prazo curto: painel fora
+  // do ar não segura a pessoa na tela de carregamento.
+  var PANEL_CHECK_MS = 15000;
+  function askPanelThenRetry(creds, missing) {
+    var started = finishCount;
+    showBootOverlay("Conferindo sua lista…");
+    var check = global.ListsScreen ? global.ListsScreen.refreshServers() : Promise.resolve();
+    var cap = new Promise(function (resolve) {
+      setTimeout(resolve, PANEL_CHECK_MS);
+    });
+    Promise.race([check, cap]).then(function () {
+      if (started !== finishCount || blockPending) return;
+      askCatalogRetry(SessionStore.loadCreds() || creds, missing);
+    });
+  }
   function askCatalogRetry(creds, missing) {
     hideBootOverlay();
+    catalogDialogOpen = true;
     var names = missing.map(function (k) {
       return PREFETCH_LABEL[k];
     });
@@ -104,8 +137,9 @@
         label: "Tentar de novo",
         accent: true,
         onSelect: function onSelect() {
+          catalogDialogOpen = false;
           showBootOverlay("Carregando catálogo…");
-          finishLogin(creds);
+          finishLogin(SessionStore.loadCreds() || creds);
         }
       }],
       focus: 0,
