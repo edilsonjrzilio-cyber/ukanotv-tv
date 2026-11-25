@@ -73,9 +73,15 @@
   // TV volta pra ela (popstate), é o Voltar do controle: recoloca a falsa e
   // manda o mesmo "sn:back" que a tecla 461 manda (spatialnav.js).
   // Se a TV mandar a tecla E voltar a página no mesmo toque, só vale um.
-  var DEDUP_MS = 700;
-  var lastKeyBack = 0;
-  var lastPopBack = 0;
+  // 25/11: a espera entre a tecla e o "voltar a página" do MESMO toque não
+  // tem prazo curto. Nas LG antigas (lentas), fechar o player do canal ao
+  // vivo segurava a TV por mais de 0,7 s; o "voltar a página" chegava
+  // depois do prazo, contava como um 2º Voltar e a tela de canais voltava
+  // pra Início ("tela cheia no ao vivo, Voltar, cai lá no início"). Agora
+  // cada tecla espera o par dela (um só) por até PAR_MS, e vice-versa.
+  var PAR_MS = 4000;
+  var esperaPop = 0; // tecla 461 chegou: o próximo popstate é o par dela
+  var esperaTecla = 0; // popstate chegou: a próxima tecla 461 é o par dele
   var exiting = false;
   function pushGuard() {
     try {
@@ -89,12 +95,14 @@
     // Na fase de captura da window: roda antes do spatialnav (document).
     global.addEventListener("keydown", function (e) {
       if (e.keyCode !== 461) return;
-      if (Date.now() - lastPopBack < DEDUP_MS) {
+      if (esperaTecla && Date.now() - esperaTecla < PAR_MS) {
+        esperaTecla = 0;
         e.preventDefault();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         return;
       }
-      lastKeyBack = Date.now();
+      esperaTecla = 0;
+      esperaPop = Date.now();
     }, true);
     global.addEventListener("popstate", function () {
       if (exiting) {
@@ -105,8 +113,12 @@
         return;
       }
       pushGuard();
-      if (Date.now() - lastKeyBack < DEDUP_MS) return;
-      lastPopBack = Date.now();
+      if (esperaPop && Date.now() - esperaPop < PAR_MS) {
+        esperaPop = 0;
+        return;
+      }
+      esperaPop = 0;
+      esperaTecla = Date.now();
       document.dispatchEvent(new CustomEvent("sn:back"));
     });
     pushGuard();
