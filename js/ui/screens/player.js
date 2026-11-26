@@ -217,7 +217,7 @@
     // mandar dados) -- antes a roleta girava pra sempre.
     s.watchdog = setInterval(function () {
       if (!s.alive || !video || !s.playingNow || video.paused) return;
-      if (Date.now() - s.lastProgressAt > STALL_LIMIT_MS) onFailure(s);
+      if (Date.now() - s.lastProgressAt > (request.kind === "live" ? LIVE_STALL_LIMIT_MS : STALL_LIMIT_MS)) onFailure(s);
     }, 1000);
     initNextEpisode(s);
     startAttempt(s);
@@ -544,6 +544,9 @@
   // valores do Android (RECONNECT_BACKOFF_MS).
   var RECONNECT_BACKOFF_MS = [3000, 5000, 8000, 15000];
   var STALL_LIMIT_MS = 30000;
+  // Ao vivo (25/11): parado 12 s já reconecta. Com 30 s a tela ficava em
+  // "Reconectando…" sem tentar de verdade, e uma conexão nova volta em 2 a 4 s.
+  var LIVE_STALL_LIMIT_MS = 12000;
   function newSession() {
     return {
       alive: true,
@@ -589,6 +592,49 @@
       video.load();
     } catch (e) {}
   }
+
+  // Canal em HLS: o endereço do painel do servidor (ex.: jzplay.top/live/…)
+  // só redireciona pro servidor de vídeo de verdade. O tocador da TV voltava
+  // a pedir pelo painel a CADA atualização da lista de pedaços (uns 10 s), e
+  // o painel, que limita pedidos, recusava parte (503 ou resposta vazia): o
+  // vídeo ficava sem pedaço novo, a folga de ~25 s acabava e travava em
+  // "Reconectando…" (medido na LG em 25/11, com outro app tocando liso o
+  // mesmo canal por uma conexão só, direto no servidor de vídeo). Agora o
+  // app segue o redirecionamento uma vez e entrega pro tocador o endereço
+  // final: as atualizações vão direto no servidor de vídeo. Se o painel
+  // recusar ou vier vazio, tenta de novo (até 3x); sem conseguir, segue com
+  // o endereço original, como antes.
+  function resolveLiveHls(url) {
+    var _tryOnce = function tryOnce(n) {
+      var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      var timer = setTimeout(function () {
+        if (ctrl) {
+          try {
+            ctrl.abort();
+          } catch (e) {}
+        }
+      }, 8000);
+      return fetch(url, {
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (res) {
+        return res.text().then(function (text) {
+          clearTimeout(timer);
+          var hasMedia = res.ok && text.indexOf("#EXTM3U") !== -1 && /\n[^#\n\r]+/.test(text);
+          if (hasMedia) return res.redirected && res.url ? res.url : url;
+          throw new Error("empty");
+        });
+      }).catch(function () {
+        clearTimeout(timer);
+        if (n >= 2) return url;
+        return new Promise(function (resolve) {
+          setTimeout(resolve, 1200);
+        }).then(function () {
+          return _tryOnce(n + 1);
+        });
+      });
+    };
+    return _tryOnce(0);
+  }
   function startAttempt(s) {
     if (!s.alive || !video) return;
     clearTimeout(s.attemptTimer);
@@ -598,23 +644,30 @@
     showSpinner(s.everPlayed ? "Reconectando…" : "Carregando…");
     updateNextCard(s);
     var seekTo = request.kind !== "live" ? s.lastGoodTime : 0;
-    video.src = alternates[altIndex % alternates.length];
-    if (seekTo > 0) {
-      var _onMeta = function onMeta() {
-        video.removeEventListener("loadedmetadata", _onMeta);
-        if (s.alive) {
-          try {
-            video.currentTime = seekTo;
-          } catch (e) {}
-        }
-      };
-      video.addEventListener("loadedmetadata", _onMeta);
-    }
-    video.play().catch(function (e) {
-      // AbortError = trocamos o src no meio (normal); falha de formato
-      // costuma vir também pelo evento "error", que é quem trata.
-      if (s.alive && e && e.name === "NotSupportedError") onFailure(s);
-    });
+    var attemptUrl = alternates[altIndex % alternates.length];
+    s.attemptSeq = (s.attemptSeq || 0) + 1;
+    var seq = s.attemptSeq;
+    var begin = function begin(finalUrl) {
+      if (!s.alive || !video || s.attemptSeq !== seq || s.failing) return;
+      video.src = finalUrl;
+      if (seekTo > 0) {
+        var _onMeta = function onMeta() {
+          video.removeEventListener("loadedmetadata", _onMeta);
+          if (s.alive) {
+            try {
+              video.currentTime = seekTo;
+            } catch (e) {}
+          }
+        };
+        video.addEventListener("loadedmetadata", _onMeta);
+      }
+      video.play().catch(function (e) {
+        // AbortError = trocamos o src no meio (normal); falha de formato
+        // costuma vir também pelo evento "error", que é quem trata.
+        if (s.alive && e && e.name === "NotSupportedError") onFailure(s);
+      });
+    };
+    if (request.kind === "live" && /\.m3u8(\?|$)/i.test(attemptUrl)) resolveLiveHls(attemptUrl).then(begin);else begin(attemptUrl);
     // Mais que o timeout de conexão da rede (mesmo motivo do Android):
     // abaixo disso a gente mesmo desistia de uma conexão só lenta.
     s.attemptTimer = setTimeout(function () {
@@ -629,6 +682,8 @@
     s.buffering = false;
     s.reconnectAttempt = 0;
     s.playedAt = Date.now();
+    // Endereço que tocou neste canal (ver onFailure: o ao vivo fica nele).
+    s.goodAlt = altIndex % alternates.length;
     s.lastProgressAt = Date.now();
     updateNextCard(s);
     // 1ª vez que algo toca neste aparelho desde a instalação: "Já assistiu"
@@ -643,6 +698,27 @@
     clearTimeout(s.attemptTimer);
     var playedLong = s.playedAt && Date.now() - s.playedAt > 20000;
     if (playedLong) s.sameUrlRetries = 0;
+    if (playedLong) s.stickRetries = 0;
+    // Ao vivo que já tocou neste endereço: continua NELE, com uma pausa antes
+    // de cada tentativa. Medido na LG em 25/11: uma falha de 2 s virava 45 s
+    // de "Reconectando…", porque o app pulava pro outro formato (.ts, que a
+    // TV nem toca: erro na hora), voltava, pulava de novo, abrindo uma
+    // conexão atrás da outra -- e conta de 1 tela recebe lista vazia enquanto
+    // o servidor ainda conta a conexão anterior. Agora fecha a conexão, espera
+    // e tenta o mesmo endereço; só depois de 6 tentativas (uns 30 s) volta à
+    // regra geral (outros formatos e espera crescente).
+    var STICK_WAIT_MS = [1500, 2500, 4000, 6000, 8000, 8000];
+    if (request.kind === "live" && s.everPlayed && s.goodAlt === altIndex % alternates.length && (s.stickRetries || 0) < STICK_WAIT_MS.length) {
+      var wait = STICK_WAIT_MS[s.stickRetries || 0];
+      s.stickRetries = (s.stickRetries || 0) + 1;
+      s.playedAt = 0;
+      stopVideo();
+      showSpinner("Reconectando…");
+      s.retryTimer = setTimeout(function () {
+        startAttempt(s);
+      }, wait);
+      return;
+    }
     // Desde quando só falha (zera quando toca por um tempo) -- ver o limite
     // mais abaixo.
     if (playedLong) s.failingSince = 0;else if (!s.failingSince) s.failingSince = Date.now();

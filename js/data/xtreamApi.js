@@ -25,6 +25,41 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     return normalizeUrl(creds.url) + "/player_api.php?username=" + encodeSeg(creds.username) + "&password=" + encodeSeg(creds.password);
   }
 
+  // 25/11: o Aura recusava parte dos pedidos por excesso (429, e 503 nos
+  // canais) e aceitava o mesmo pedido segundos depois. O app tratava a recusa
+  // como servidor fora: trocava de DNS/servidor, ou o catálogo "não
+  // carregava". Recusa por excesso espera um pouco e pede de novo (até 2
+  // vezes); o prazo de quem chama continua valendo por cima.
+  var BUSY_RETRY_MS = [2500, 4000];
+  // Um pedido por vez ao servidor da lista (25/11, medido na LG): a entrada
+  // disparava 6 pedidos juntos (canais, filmes, séries + as 3 categorias),
+  // logo depois das conferências, e o Aura recusava vários na hora (429 em
+  // 0,1 s) -- o catálogo "não carregava" e a tela ficava girando, enquanto
+  // um app que pede uma coisa de cada vez abria normal. A fila vale pra tudo
+  // que passa por aqui; o próximo só sai quando o anterior respondeu.
+  var queueTail = Promise.resolve();
+  function fetchQueued(url, options) {
+    var run = function run() {
+      if (options && options.signal && options.signal.aborted) return Promise.reject(new Error("aborted"));
+      return fetch(url, options);
+    };
+    var mine = queueTail.then(run, run);
+    queueTail = mine.then(function () {}, function () {});
+    return mine;
+  }
+  function fetchRetryBusy(url, options, attempt) {
+    attempt = attempt || 0;
+    return fetchQueued(url, options).then(function (res) {
+      if (res.status !== 429 && res.status !== 503 || attempt >= BUSY_RETRY_MS.length) return res;
+      if (options && options.signal && options.signal.aborted) return res;
+      return new Promise(function (resolve) {
+        setTimeout(resolve, BUSY_RETRY_MS[attempt]);
+      }).then(function () {
+        return fetchRetryBusy(url, options, attempt + 1);
+      });
+    });
+  }
+
   // Teto do pedido inteiro (19/11): sem ele, servidor que manda o catálogo aos
   // poucos deixava o pedido aberto pra sempre e Ao vivo/Filmes/Séries ficavam
   // em "carregando" até fechar o app (clientes presos ~20 min). Passou do teto
@@ -44,7 +79,7 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
         reject(new Error("timeout"));
       }, capMs);
     });
-    var request = fetch(url, {
+    var request = fetchRetryBusy(url, {
       headers: {
         Accept: accept
       },
@@ -79,7 +114,7 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
         reject(new Error("timeout"));
       }, QUICK_CHECK_TIMEOUT_MS);
     });
-    var request = fetch(url, {
+    var request = fetchRetryBusy(url, {
       headers: {
         Accept: "application/json, text/plain, */*"
       },
@@ -159,11 +194,23 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
   // Falhou sem ser por prazo: confere de novo pela lista de categorias.
   function xtreamAuthCheck(creds, quick) {
     var get = quick ? getJsonQuick : getJson;
-    return get(apiBase(creds)).then(healthFromText, function (e) {
-      if (e && e.message === "timeout") return "unknown";
+    var byCategories = function byCategories() {
       return get(apiBase(creds) + "&action=get_live_categories").then(healthFromText, function () {
         return "unknown";
       });
+    };
+    // 25/11: o Aura respondia o pedido de login com 200 e corpo VAZIO, e os
+    // pedidos com "action" (categorias, canais) normalmente. A conferência
+    // dava "sem resposta" com o servidor funcionando: o app trocava de DNS,
+    // caía no Reserva e baixava o catálogo de novo a cada abertura, enquanto
+    // outros apps tocavam normal. Resposta que não dá pra ler também confere
+    // pela lista de categorias.
+    return get(apiBase(creds)).then(function (text) {
+      var health = healthFromText(text);
+      return health === "unknown" ? byCategories() : health;
+    }, function (e) {
+      if (e && e.message === "timeout") return "unknown";
+      return byCategories();
     });
   }
   function isServerHealthy(creds) {
@@ -206,8 +253,105 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
   // se a busca nova falhar, as telas continuam com a que já tinha, em vez
   // de ficarem vazias.
   var staleCache = {};
+  // A chave não leva o DNS: trocar de DNS dentro do mesmo servidor é a mesma
+  // conta e o mesmo catálogo (antes a troca jogava o catálogo fora e baixava
+  // os 3 de novo). Lista direta (sem servidor do painel) segue pelo endereço.
   function listCacheKey(creds, kind) {
-    return kind + "|" + (creds.mode || "xtream") + "|" + (creds.url || creds.m3uUrl || "") + "|" + (creds.username || "");
+    return kind + "|" + (creds.mode || "xtream") + "|" + (creds.currentServerId || creds.url || creds.m3uUrl || "") + "|" + (creds.username || "");
+  }
+
+  // ===== Catálogo guardado na TV (25/11) =====
+  // Antes o app baixava canais, filmes e séries inteiros (uns 23 MB, 6
+  // pedidos) em TODA abertura. Servidor que limita pedidos por minuto (o
+  // Aura devolvia 429) recusava parte deles e a tela ficava girando sem
+  // entrar, enquanto app que guarda o catálogo no aparelho abria em
+  // segundos. Agora cada lista fica guardada (IndexedDB) e a abertura usa a
+  // guardada: canais valem 3 horas, filmes e séries 7 dias (mesma regra do
+  // Android desde a v69). "Recarregar" baixa tudo de novo. Se o servidor
+  // não responder, vale a guardada, de qualquer idade.
+  var DISK_DB = "ukanotv-catalogo";
+  var DISK_STORE = "listas";
+  var DISK_MAX_AGE_MS = {
+    live: 3 * 3600 * 1000,
+    vod: 7 * 24 * 3600 * 1000,
+    series: 7 * 24 * 3600 * 1000
+  };
+  var forceNet = {};
+  var diskDb = null;
+  function diskOpen() {
+    if (diskDb) return diskDb;
+    diskDb = new Promise(function (resolve) {
+      try {
+        var rq = global.indexedDB.open(DISK_DB, 1);
+        rq.onupgradeneeded = function () {
+          rq.result.createObjectStore(DISK_STORE);
+        };
+        rq.onsuccess = function () {
+          resolve(rq.result);
+        };
+        rq.onerror = function () {
+          resolve(null);
+        };
+        rq.onblocked = function () {
+          resolve(null);
+        };
+      } catch (e) {
+        resolve(null);
+      }
+    });
+    return diskDb;
+  }
+  // { at, json } ou null. Nunca rejeita.
+  function diskGet(key) {
+    return diskOpen().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var rq = db.transaction(DISK_STORE, "readonly").objectStore(DISK_STORE).get(key);
+          rq.onsuccess = function () {
+            resolve(rq.result && rq.result.json ? rq.result : null);
+          };
+          rq.onerror = function () {
+            resolve(null);
+          };
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    });
+  }
+  // Melhor esforço. Guarda só a lista desta conta: apaga as do mesmo tipo
+  // de outras contas/servidores, pra não encher a memória da TV.
+  function diskPut(key, kind, list) {
+    if (!list || !list.length) return;
+    var json;
+    try {
+      json = JSON.stringify(list);
+    } catch (e) {
+      return;
+    }
+    diskOpen().then(function (db) {
+      if (!db) return;
+      try {
+        var store = db.transaction(DISK_STORE, "readwrite").objectStore(DISK_STORE);
+        var keys = store.getAllKeys ? store.getAllKeys() : null;
+        if (keys) keys.onsuccess = function () {
+          (keys.result || []).forEach(function (k) {
+            if (k !== key && String(k).indexOf(kind + "|") === 0) store.delete(k);
+          });
+        };
+        store.put({
+          at: Date.now(),
+          json: json
+        }, key);
+      } catch (e) {}
+    });
+  }
+  // Quando a lista guardada deste tipo foi baixada (ms), ou 0.
+  function savedAt(creds, kind) {
+    return diskGet(listCacheKey(creds, kind)).then(function (saved) {
+      return saved ? saved.at : 0;
+    });
   }
   function cachedList(kind, creds, fetchFn) {
     var key = listCacheKey(creds, kind);
@@ -218,7 +362,30 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
       if (k.indexOf(kind + "|") === 0 && k !== key) delete listCache[k];
     });
     var stale = staleCache[key];
-    var p = fetchFn().then(function (list) {
+    var p = diskGet(key).then(function (saved) {
+      var fromDisk = function fromDisk() {
+        return JSON.parse(saved.json);
+      };
+      var forced = forceNet[kind];
+      delete forceNet[kind];
+      if (saved && !forced && Date.now() - saved.at < DISK_MAX_AGE_MS[kind]) {
+        try {
+          return fromDisk();
+        } catch (e) {}
+      }
+      return fetchFn().then(function (list) {
+        diskPut(key, kind, list);
+        return list;
+      }, function (e) {
+        // Servidor não respondeu: a guardada, mesmo antiga, é melhor que nada.
+        if (saved && !stale) {
+          try {
+            return fromDisk();
+          } catch (e2) {}
+        }
+        throw e;
+      });
+    }).then(function (list) {
       delete staleCache[key];
       return list;
     }, function (e) {
@@ -233,10 +400,15 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     return p;
   }
   // Chamado por App.reloadSession() -- "Recarregar" deve buscar dado NOVO
-  // do provedor, não repetir o que já estava em memória.
+  // do provedor, não repetir o que já estava em memória nem o guardado.
   function clearListCache() {
     staleCache = listCache;
     listCache = {};
+    forceNet = {
+      live: true,
+      vod: true,
+      series: true
+    };
   }
 
   // Lista do catálogo. Resposta que não é lista (página de erro, JSON
@@ -770,6 +942,7 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     getSeries: getSeries,
     prefetchAll: prefetchAll,
     clearListCache: clearListCache,
+    savedAt: savedAt,
     loadSeriesEpisodes: loadSeriesEpisodes,
     getSeriesPlot: getSeriesPlot,
     loadSeriesDetail: loadSeriesDetail,
