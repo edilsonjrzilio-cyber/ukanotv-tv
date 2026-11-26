@@ -82,6 +82,25 @@
         });
       });
     }).then(function (failedKinds) {
+      // 26/11: a conta respondia mas o catálogo não vinha (Aura recusando a
+      // lista) e o app só mostrava o erro, sem ir pro Reserva. Procura o 2º
+      // servidor / Reserva igual o Android 71. Sem pingue-pongue: depois de
+      // uma troca dessas, 5 min sem outra.
+      // Também quando a guardada cobriu um servidor que não entregou: sem
+      // outro servidor que responda, entra com ela (failedKinds vazio).
+      var notServing = failedKinds && failedKinds.length || XtreamApi.serverFailedFor(current);
+      if (!notServing || !hasOtherServers(current) || navigator.onLine === false) return failedKinds;
+      if (Date.now() - lastCatalogFailoverAt < CATALOG_FAILOVER_PAUSE_MS) return failedKinds;
+      showBootOverlay("Procurando outro servidor…");
+      return findWorkingServer(current).then(function (other) {
+        if (!other) return failedKinds;
+        var adopted = adoptServer(current, other);
+        if (adopted === current) return failedKinds;
+        lastCatalogFailoverAt = Date.now();
+        current = adopted;
+        return prefetchCatalog(current);
+      });
+    }).then(function (failedKinds) {
       missing = failedKinds || [];
     }, function () {}).then(function () {
       hideNoticeLater();
@@ -110,6 +129,8 @@
   // recarrega com ela (onLoggedIn -> finishLogin). Prazo curto: painel fora
   // do ar não segura a pessoa na tela de carregamento.
   var PANEL_CHECK_MS = 15000;
+  var CATALOG_FAILOVER_PAUSE_MS = 5 * 60 * 1000;
+  var lastCatalogFailoverAt = 0;
   function askPanelThenRetry(creds, missing) {
     var started = finishCount;
     showBootOverlay("Conferindo sua lista…");

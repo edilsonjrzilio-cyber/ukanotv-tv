@@ -353,6 +353,16 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
       return saved ? saved.at : 0;
     });
   }
+
+  // Listas (por chave) em que o servidor não entregou e a guardada cobriu
+  // (26/11): com o servidor fora a guardada abre, mas nada toca -- o
+  // App.finishLogin procura o 2º servidor / Reserva.
+  var serverFailedKeys = {};
+  function serverFailedFor(creds) {
+    return ["live", "vod", "series"].some(function (k) {
+      return !!serverFailedKeys[listCacheKey(creds, k)];
+    });
+  }
   function cachedList(kind, creds, fetchFn) {
     var key = listCacheKey(creds, kind);
     if (listCache[key]) return listCache[key];
@@ -374,9 +384,11 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
         } catch (e) {}
       }
       return fetchFn().then(function (list) {
+        delete serverFailedKeys[key];
         diskPut(key, kind, list);
         return list;
       }, function (e) {
+        serverFailedKeys[key] = true;
         // Servidor não respondeu: a guardada, mesmo antiga, é melhor que nada.
         if (saved && !stale) {
           try {
@@ -943,6 +955,7 @@ function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == 
     prefetchAll: prefetchAll,
     clearListCache: clearListCache,
     savedAt: savedAt,
+    serverFailedFor: serverFailedFor,
     loadSeriesEpisodes: loadSeriesEpisodes,
     getSeriesPlot: getSeriesPlot,
     loadSeriesDetail: loadSeriesDetail,
